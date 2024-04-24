@@ -12,6 +12,7 @@ const stringSessionBot = process.env.TELEGRAM_STRING_SESSION;
 const stringSessionMan = new StringSession(
   process.env.TELEGRAM_STRING_SESSION_MAN,
 );
+const channelUsername = process.env.CHANNEL_USERNAME;
 const channelId = process.env.CHANNEL_ID;
 
 const clientBot = new TelegramClient(
@@ -44,17 +45,23 @@ const connectClients = async () => {
   }
 };
 
-let messagesSearchQuery = '#в_наявності';
-
-const getChannelMessages = async (quantity) => {
-  return await clientMan.getMessages(channelId, {
+const getChannelMessagesIds = async (quantity, messagesSearchQuery = '') => {
+  let channelMessagesIds = [];
+  let channelMessages = await clientMan.getMessages(channelId, {
+    addOffset: 0,
     limit: quantity,
     filter: new Api.InputMessagesFilterPhotoVideo(),
     search: messagesSearchQuery,
   });
+
+  channelMessages.forEach((channelMessage) => {
+    channelMessagesIds.push(channelMessage.id);
+  });
+  channelMessagesIds = channelMessagesIds.reverse();
+  console.log(channelMessages);
+  return channelMessagesIds;
 };
 
-//////////////////////////////////////////////////////////////////////////////////////
 (async () => {
   await connectClients();
 
@@ -74,11 +81,13 @@ const getChannelMessages = async (quantity) => {
     }
   });
 
+  ///////////////////////////////////////////////////////////////////////////////////
+
   bot.command(
     'start',
     async (ctx) =>
       await ctx.reply(
-        'привіт, на звʼязку бот Zycsel_store🦖 Тут ви можете переглянути всю наявність по брендам/розмірам тощо.',
+        'Привіт, на звʼязку бот Zycsel_store🦖 Тут ви можете переглянути всю наявність по брендам/розмірам тощо.',
         {
           reply_parameters: { message_id: ctx.msg.message_id },
         },
@@ -86,18 +95,13 @@ const getChannelMessages = async (quantity) => {
   );
 
   bot.command('items', async (ctx) => {
-    const channelMessages = await getChannelMessages(1);
+    const channelMessagesIds = await getChannelMessagesIds(20);
 
-    channelMessages.forEach(async (channelMessage) => {
-      if (channelMessage.message.length <= 0) {
-        channelMessage.message = 'empty';
-        return;
-      }
+    console.log(ctx.chat.id);
+    console.log(channelId);
+    console.log(channelMessagesIds);
 
-      // Отправка текста сообщения
-      await bot.api.sendMessage(ctx.chat.id, channelMessage.message);
-    });
+    await ctx.api.forwardMessages(ctx.chat.id, +channelId, channelMessagesIds);
   });
-
   bot.start();
 })();
