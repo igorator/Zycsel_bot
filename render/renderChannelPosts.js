@@ -1,13 +1,18 @@
-const { InputMediaBuilder } = require('@supabase/supabase-js');
+const { InputMediaBuilder } = require('grammy');
+const { createClient } = require('@supabase/supabase-js');
 
-const renderChannelPosts = async (channelPosts) => {
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+const renderChannelPosts = async (ctx, channelPosts) => {
   channelPosts.forEach(async (post) => {
     const mediaGroupItems = [];
+
     const postMedia = await supabase
       .from('Post-media')
-      .select(
-        'media-files, media-type, Zycsel-channel-posts-table(media-group-id)',
-      )
+      .select('media-files, media-type')
       .eq('media-group-id', post['media-group-id']);
 
     postMedia.data.forEach((media, index) => {

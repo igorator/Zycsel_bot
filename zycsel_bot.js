@@ -1,15 +1,17 @@
 require('dotenv').config();
-const { getChannelPosts } = require('./helpers/getChannelPosts');
-const { renderChannelPosts } = require('./helpers/renderChannelPosts');
-const { createClient } = require('@supabase/supabase-js');
+const { getChannelPosts } = require('./database/getChannelPosts');
+const { renderChannelPosts } = require('./render/renderChannelPosts');
+const {
+  upsertPostToDatabase,
+  upsertMediaToDatabase,
+} = require('./database/upsertPostToDatabase');
 const moment = require('moment');
-
 const { Bot, GrammyError, HttpError, Keyboard, session } = require('grammy');
-
-///////////////////////////////////////////////////////////////////////////////////////////////
+const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,57 +41,150 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////
 
-  const renderQualityControls = async (ctx) => {
-    await ctx.reply(`Будь-ласка, оберіть стан речі.`, {
-      reply_markup: qualityKeyboard,
-    });
+  const itemsTypes = {
+    clothes: 'одяг',
+    shoes: 'взуття',
+    accessories: 'аксесуари',
   };
 
+  const clothingSizes = [
+    'XS',
+    'S',
+    'M',
+    'L',
+    'XL',
+    'XXL',
+    'XXXL',
+    'Джуніор',
+    'Жіноче',
+  ];
+  const shoesSizes = [
+    '40',
+    '41',
+    '42',
+    '42_5',
+    '43',
+    '43_5',
+    '44',
+    '44_5',
+    '45',
+    '45_5',
+    '46',
+    '47',
+  ];
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////
+
   const renderTypeControls = async (ctx) => {
-    const msgReply =
-      ctx.match === 'Назад'
-        ? 'Оберіть тип речі'
-        : `Ви обрали ${ctx.match}. Оберіть тип речі.`;
+    const msgReply = 'Оберіть тип речей';
 
     await ctx.reply(msgReply, {
       reply_markup: typeKeyboard,
     });
   };
 
-  const renderClothesSizeControls = async (ctx) => {
+  //////////////////////////////////////////////////////////////////////////////////////////////
+
+  const renderQualityControls = async (ctx) => {
     const msgReply =
       ctx.match === 'Назад'
-        ? 'Оберіть розмір речі'
-        : `Ви обрали ${ctx.match}. Оберіть розмір речі.`;
+        ? 'Оберіть стан речей'
+        : `Ви обрали ${ctx.match}. Оберіть стан речей.`;
 
     await ctx.reply(msgReply, {
-      reply_markup: sizesKeyboard(clothingSizesLabels),
+      reply_markup: qualityKeyboard,
     });
   };
 
-  const renderShoesSizeControls = async (ctx) => {
+  //////////////////////////////////////////////////////////////////////////////////////////////
+
+  const renderSizeControls = async (ctx) => {
+    let sizeButtons;
+    if (ctx.session.type === itemsTypes.clothes) {
+      sizeButtons = await supabase
+        .from('Zycsel-channel-posts-table')
+        .select('sizes')
+        .eq('type', 'одяг')
+        .eq('is-new', ctx.session.isNew)
+        .eq('is-in-stock', true);
+    } else if (ctx.session.type === itemsTypes.shoes) {
+      sizeButtons = await supabase
+        .from('Zycsel-channel-posts-table')
+        .select('sizes', { distict: true })
+        .eq('type', 'взуття')
+        .eq('is-in-stock', true);
+    }
+
+    sizeButtons = sizeButtons.data
+      .map((element) => element.sizes)
+      .flatMap((subArray) => subArray);
+
+    sizeButtons = Array.from(new Set(sizeButtons));
+
+    sizeButtons = clothingSizes.filter((label) => sizeButtons.includes(label));
+
     const msgReply =
       ctx.match === 'Назад'
-        ? 'Оберіть розмір речі'
-        : `Ви обрали ${ctx.match}. Оберіть розмір речі.`;
+        ? 'Оберіть розмір речей'
+        : `Ви обрали ${ctx.match}. Оберіть розмір речей.`;
 
     await ctx.reply(msgReply, {
-      reply_markup: sizesKeyboard(shoesSizeLabels),
+      reply_markup: sizesKeyboard(sizeButtons),
     });
   };
+
+  //////////////////////////////////////////////////////////////////////////////////////////////
 
   const renderBrandControls = async (ctx) => {
-    const msgReply =
-      ctx.match === 'Назад' ? 'Оберіть тип речі' : `Вы обрали ${ctx.match}.`;
+    let brandButtons;
+    if (ctx.session.type === itemsTypes.accessories) {
+      brandButtons = await supabase
+        .from('Zycsel-channel-posts-table')
+        .select('brand')
+        .eq('type', itemsTypes.accessories)
+        .eq('is-new', ctx.session.isNew)
+        .eq('is-in-stock', true);
+    } else if (ctx.session.type === itemsTypes.clothes) {
+      brandButtons = await supabase
+        .from('Zycsel-channel-posts-table')
+        .select('brand')
+        .eq('type', itemsTypes.clothes)
+        .eq('is-new', ctx.session.isNew)
+        .eq('is-in-stock', true);
+    } else if (ctx.session.type === itemsTypes.shoes) {
+      brandButtons = await supabase
+        .from('Zycsel-channel-posts-table')
+        .select('brand')
+        .eq('type', itemsTypes.shoes)
+        .eq('is-new', ctx.session.isNew)
+        .eq('is-in-stock', true);
+    }
+    brandButtons = brandButtons.data.map((element) => element.brand);
+
+    brandButtons = brandButtons.flatMap((subArray) => subArray);
+
+    brandButtons = Array.from(new Set(brandButtons));
+
+    brandButtons = brandButtons.filter(
+      (element) => !['Stone Island', 'Cp Company'].includes(element),
+    );
+
+    brandButtons = brandButtons.sort();
+
+    brandButtons = brandButtons;
+
+    const msgReply = `Вы обрали ${ctx.match}. Оберіть бренд`;
     await ctx.reply(msgReply, {
-      reply_markup: brandKeyboard(brands),
+      reply_markup: brandKeyboard(brandButtons),
     });
   };
+
+  //////////////////////////////////////////////////////////////////////////////////////////////
 
   const renderItemsSearchControls = async (ctx) => {
     const msgReply =
-      ctx.match === 'Будь-який'
-        ? 'Ви обрали усі бренди'
+      ctx.match === 'Всі бренди'
+        ? 'Ви обрали всі бренди'
         : `Ви обрали бренд ${ctx.match}`;
 
     await ctx.reply(msgReply, {
@@ -102,17 +197,15 @@ const supabase = createClient(supabaseUrl, supabaseKey);
   const SCREENS = {
     qualitySelection: 'qualitySelection',
     typeSelection: 'typeSelection',
-    clothesSizeSelection: 'clothesSizeSelection',
-    shoesSizeSelection: 'shoesSizeSelection',
+    sizeSelection: 'sizeSelection',
     brandSelection: 'brandSelection',
     itemsSearchSelection: 'itemsSearchSelection',
   };
 
   const SCREEN_FACTORY = {
-    [SCREENS.qualitySelection]: renderQualityControls,
     [SCREENS.typeSelection]: renderTypeControls,
-    [SCREENS.clothesSizeSelection]: renderClothesSizeControls,
-    [SCREENS.shoesSizeSelection]: renderShoesSizeControls,
+    [SCREENS.qualitySelection]: renderQualityControls,
+    [SCREENS.sizeSelection]: renderSizeControls,
     [SCREENS.brandSelection]: renderBrandControls,
     [SCREENS.itemsSearchSelection]: renderItemsSearchControls,
   };
@@ -122,11 +215,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
   function initial() {
     return {
       screen: '',
-      from: 0,
-      to: 10,
-      isNew: 'true',
+      isNew: true,
       type: 'одяг',
-      sizes: '',
+      size: '',
       brand: '',
     };
   }
@@ -142,7 +233,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     .text('Вживані')
     .row()
     .resized()
-    .placeholder('Оберіть стан речі');
+    .text('Назад')
+    .row()
+    .resized()
+    .placeholder('Оберіть стан речей');
 
   const typeKeyboard = new Keyboard()
     .text('Одяг')
@@ -153,26 +247,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     .text('Аксесуари')
     .row()
     .resized()
-    .text('Назад')
-    .row()
-    .resized()
-    .placeholder('Оберіть тип речі');
-
-  const clothingSizesLabels = ['хс', 'с', 'м', 'л', 'хл', 'ххл', 'хххл'];
-  const shoesSizeLabels = [
-    '40',
-    '41',
-    '42',
-    '42_5',
-    '43',
-    '43_5',
-    '44',
-    '44_5',
-    '45',
-    '45_5',
-    '46',
-    '47',
-  ];
+    .placeholder('Оберіть тип речей');
 
   const sizesKeyboard = (sizesLabels) => {
     const sizesButtons = sizesLabels.map((label) => {
@@ -183,23 +258,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
     const sizeKeyboard = Keyboard.from(sizesButtons)
       .resized()
-      .placeholder('Оберіть розмір');
+      .placeholder('Оберіть розмір речей');
 
     return sizeKeyboard;
   };
-
-  const brands = [
-    'stoneisland',
-    'cpcompany',
-    'mastrum',
-    'aape',
-    'a_cold_wall',
-    'adidas',
-    'alphaindustries',
-    'arcteryx',
-    'armani',
-    'carhartt',
-  ];
 
   const brandKeyboard = (brands) => {
     const brandButtons = brands.map((label) => {
@@ -208,7 +270,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
     brandButtons.unshift(
       [Keyboard.text('Назад')],
-      [Keyboard.text('Будь-який')],
+      [Keyboard.text('Всі бренди')],
+      [Keyboard.text('Stone Island')],
+      [Keyboard.text('Cp Company')],
     );
 
     const brandsKeyboard = Keyboard.from(brandButtons)
@@ -218,16 +282,12 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     return brandsKeyboard;
   };
 
-  const itemsSearchKeyboard = new Keyboard()
-    .text('Завантажити ще')
-    .row()
-    .text('Знайти інші речі')
-    .row();
+  const itemsSearchKeyboard = new Keyboard().text('Знайти інші речі').row();
 
   ///////////////////////////////////////////////////////////////////////////////////////////////
 
   bot.command('start', async (ctx) => {
-    ctx.session.screen = SCREENS.qualitySelection;
+    ctx.session.screen = SCREENS.typeSelection;
     await ctx.reply(
       'Привіт, на звʼязку бот Zycsel_store🦖 Тут ви можете переглянути всю наявність по брендам/розмірам тощо.',
       {
@@ -235,34 +295,72 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       },
     );
 
-    const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+    const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
     renderControls(ctx);
   });
 
   ///////////////////////////////////////////////////////////////////////////////////////////////
 
+  bot.hears('Одяг', async (ctx) => {
+    ctx.session.type = 'одяг';
+    ctx.session.screen = SCREENS.qualitySelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+    renderControls(ctx);
+  });
+
+  bot.hears('Взуття', async (ctx) => {
+    ctx.session.type = 'взуття';
+    ctx.session.isNew = true;
+    ctx.session.screen = SCREENS.sizeSelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
+    renderControls(ctx);
+  });
+
+  bot.hears('Аксесуари', async (ctx) => {
+    ctx.session.type = 'аксесуари';
+    ctx.session.screen = SCREENS.qualitySelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+    renderControls(ctx);
+  });
+  ///////////////////////////////////////////////////////////////////////////////////////////////
+
   bot.hears('Нові', async (ctx) => {
     ctx.session.isNew = true;
-    ctx.session.screen = SCREENS.typeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
+    if (ctx.session.type === 'аксесуари') {
+      ctx.session.screen = SCREENS.brandSelection;
+      const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
+      renderControls(ctx);
+      return;
+    }
+
+    ctx.session.screen = SCREENS.sizeSelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
     renderControls(ctx);
   });
 
   bot.hears('Вживані', async (ctx) => {
-    ctx.session.screen = SCREENS.typeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
+    ctx.session.isNew = false;
+    if (ctx.session.type === 'аксесуари') {
+      ctx.session.screen = SCREENS.brandSelection;
+      const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
+      renderControls(ctx);
+      return;
+    }
+    ctx.session.screen = SCREENS.sizeSelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
     renderControls(ctx);
   });
 
   bot.hears('Назад', async (ctx) => {
-    if (ctx.session.screen === SCREENS.typeSelection) {
-      ctx.session.screen = SCREENS.qualitySelection;
-      const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+    if (ctx.session.screen === SCREENS.qualitySelection) {
+      ctx.session.screen = SCREENS.typeSelection;
+      const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
       renderControls(ctx);
-    } else if (
-      ctx.session.screen === SCREENS.clothesSizeSelection ||
-      ctx.session.screen === SCREENS.shoesSizeSelection
-    ) {
+    } else if (ctx.session.screen === SCREENS.sizeSelection) {
+      ctx.session.screen = SCREENS.qualitySelection;
+      const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.typeSelection]];
+      renderControls(ctx);
+    } else if (ctx.session.screen === SCREENS.sizeSelection) {
       ctx.session.screen = SCREENS.typeSelection;
       const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.typeSelection]];
       renderControls(ctx);
@@ -272,34 +370,12 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     }
   });
 
-  /////////////////////////////////////////////////////////////////////////////////////////
-
-  bot.hears('Одяг', async (ctx) => {
-    ctx.session.type = 'одяг';
-    ctx.session.screen = SCREENS.clothesSizeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.clothesSizeSelection];
-    renderControls(ctx);
-  });
-
-  bot.hears('Взуття', async (ctx) => {
-    ctx.session.type = 'взуття';
-    ctx.session.screen = SCREENS.shoesSizeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.shoesSizeSelection];
-    renderControls(ctx);
-  });
-
-  bot.hears('Аксесуари', async (ctx) => {
-    ctx.session.type = 'аксесуари';
-    ctx.session.screen = SCREENS.brandSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
-    renderControls(ctx);
-  });
   ///////////////////////////////////////////////////////////////////////////////////////////////
 
   const botOnSizeEvents = (sizes) => {
     sizes.map((label) => {
       return bot.hears(label, async (ctx) => {
-        ctx.session.sizes = label;
+        ctx.session.size = label;
         ctx.session.screen = SCREENS.brandSelection;
         const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
         renderControls(ctx);
@@ -307,181 +383,86 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     });
   };
 
-  botOnSizeEvents(clothingSizesLabels);
-  botOnSizeEvents(shoesSizeLabels);
+  botOnSizeEvents(clothingSizes);
+  botOnSizeEvents(shoesSizes);
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////////////////
 
-  bot.hears('Будь-який', async (ctx) => {
+  bot.hears('Всі бренди', async (ctx) => {
     ctx.session.brand = '';
-    ctx.session.screen = SCREENS.itemsSearch;
+    ctx.session.screen = SCREENS.itemsSearchSelection;
     const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
-    console.log(ctx.session);
     renderControls(ctx);
 
     const channelPosts = await getChannelPosts(
-      ctx.session.from,
-      ctx.session.to,
       ctx.session.isNew,
       ctx.session.type,
-      ctx.session.sizes,
+      ctx.session.size,
       ctx.session.brand,
     );
 
     if (channelPosts.length <= 0) {
-      ctx.reply('За вашим запитом більше немає речей');
+      ctx.reply('За вашим запитом ще немає речей');
     } else {
-      await renderChannelPosts(channelPosts);
+      ctx.reply('Перелік речей за вашим запитом:');
+      await renderChannelPosts(ctx, channelPosts);
     }
   });
 
-  const botOnBrandEvents = (brands) => {
+  let brands = await supabase
+    .from('Zycsel-channel-posts-table')
+    .select('brand')
+    .eq('is-in-stock', true);
+
+  brands = brands.data
+    .map((element) => element.brand)
+    .flatMap((subArray) => subArray);
+
+  brands = Array.from(new Set(brands));
+
+  const botOnBrandEvents = async (brands) => {
     brands.map((label) => {
       return bot.hears(label, async (ctx) => {
+        ctx.session.brand = label;
         ctx.session.screen = SCREENS.itemsSearchSelection;
         const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
-        ctx.session.brand = label;
         renderControls(ctx);
 
         const channelPosts = await getChannelPosts(
-          ctx.session.from,
-          ctx.session.to,
           ctx.session.isNew,
           ctx.session.type,
-          ctx.session.sizes,
+          ctx.session.size,
           ctx.session.brand,
         );
 
         if (channelPosts.length <= 0) {
-          ctx.reply('За вашим запитом більше немає речей');
+          ctx.reply('За вашим запитом ще немає речей');
         } else {
-          await renderChannelPosts(channelPosts);
+          ctx.reply('Перелік речей за вашим запитом:');
+          await renderChannelPosts(ctx, channelPosts);
         }
       });
     });
   };
 
-  botOnBrandEvents(brands);
+  await botOnBrandEvents(brands);
   ///////////////////////////////////////////////////////////////////////////////////////////////
-
-  bot.hears('Завантажити ще', async (ctx) => {
-    ctx.session.from = ctx.session.from + 10;
-    ctx.session.to = ctx.session.to + 10;
-
-    const channelPosts = await getChannelPosts(
-      ctx.session.from,
-      ctx.session.to,
-      ctx.session.isNew,
-      ctx.session.type,
-      ctx.session.sizes,
-      ctx.session.brand,
-    );
-
-    if (channelPosts.length <= 0) {
-      ctx.reply('За вашим запитом більше немає речей');
-    } else {
-      await renderChannelPosts(channelPosts);
-    }
-  });
 
   bot.hears('Знайти інші речі', async (ctx) => {
-    ctx.session.from = 0;
-    ctx.session.to = 10;
-    ctx.session.isNew = true;
+    ctx.session.isNew = null;
     ctx.session.type = '';
-    ctx.session.sizes = '';
+    ctx.session.size = '';
     ctx.session.brand = '';
-    ctx.session.screen = SCREENS.qualitySelection;
+    ctx.session.screen = SCREENS.typeSelection;
 
-    const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+    const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
     renderControls(ctx);
   });
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////
-
-  const sendPostToDatabase = async (
-    mediaGroupId,
-    postCaption,
-    createdAtDate,
-    editAtDate,
-    isNew,
-    isInStock,
-    brand,
-    sizes,
-    itemType,
-  ) => {
-    const { data, error } = await supabase
-      .from('Zycsel-channel-posts-table')
-      .upsert({
-        'media-group-id': mediaGroupId,
-        'post-caption': postCaption,
-        'created-at-date': createdAtDate,
-        'edited-at-date': editAtDate,
-        'is-new': isNew,
-        'is-in-stock': isInStock,
-        'brand': brand,
-        'sizes': sizes,
-        'type': itemType,
-      })
-      .select();
-  };
-
-  const sendMediaToDatabase = async (
-    messageId,
-    mediaGroupId,
-    postMedia,
-    mediaType,
-  ) => {
-    const { data, error } = await supabase
-      .from('Post-media')
-      .insert({
-        'id': messageId,
-        'media-group-id': mediaGroupId,
-        'media-files': postMedia,
-        'media-type': mediaType,
-      })
-      .select();
-  };
-
-  ///////////////////////////////////////////////////////////////////////////
-
-  const editPostInDatabase = async (
-    mediaGroupId,
-    postCaption,
-    editAtDate,
-    isNew,
-    isInStock,
-    brand,
-    sizes,
-    itemType,
-  ) => {
-    const { data, error } = await supabase
-      .from('Zycsel-channel-posts-table')
-      .update({
-        'post-caption': postCaption,
-        'edited-at-date': editAtDate,
-        'is-new': isNew,
-        'is-in-stock': isInStock,
-        'brand': brand,
-        'sizes': sizes,
-        'type': itemType,
-      })
-      .eq('media-group-id', mediaGroupId)
-      .select();
-  };
-
-  const editMediaInDatabase = async (mediaGroupId, postMedia, mediaType) => {
-    const { data, error } = await supabase
-      .from('Post-media')
-      .update({ 'media-files': postMedia, 'media-type': mediaType })
-      .eq('media-group-id', mediaGroupId)
-      .select();
-  };
 
   ////////////////////////////////////////////////////////////////////////////////////
 
   const sizeRegExp =
-    /#розмір_(?:[а-яА-ЯҐґЄєІіЇїЁёәӘңҮүҖҗҒғҺһӨөҮү]+|\d+(?:_\d+)?)/g;
+    /#розмір_(?:[a-zA-Zа-яА-ЯҐґЄєІіЇїЁёәӘңҮүҖҗҒғҺһӨөҮү]+|\d+(?:_\d+)?)/g;
 
   const brandRegExp = /#бренд_\w+/;
 
@@ -510,7 +491,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       let createdAtDate;
       let editAtDate;
       let brand;
-      let sizes;
+      let sizes = [];
       let itemType;
 
       postCaption = channelPostData.caption;
@@ -522,14 +503,21 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       } else itemType = 'одяг';
 
       if (channelPostData.caption.match(sizeRegExp)) {
-        sizes = channelPostData.caption
+        const channelPostSizes = channelPostData.caption
           .match(sizeRegExp)
-          .map((size) => size.replace('#розмір_', ''))
-          .join(', ');
+          .map((size) => {
+            return size.replace('#розмір_', '');
+          });
+        sizes = channelPostSizes;
       }
 
       if (channelPostData.caption.match(brandRegExp)) {
-        brand = channelPostData.caption.match(brandRegExp);
+        brand = channelPostData.caption
+          .match(brandRegExp)[0]
+          .replace('#бренд_', '')
+          .replace('_', ' ');
+
+        brand = brand.replace(/\b\w/g, (char) => char.toUpperCase());
       }
 
       isInStock = channelPostData.caption.includes('#в_наявності');
@@ -550,7 +538,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .format('YYYY-MM-DD HH:mm:ssZ');
       }
 
-      await sendPostToDatabase(
+      await upsertPostToDatabase(
         mediaGroupId,
         postCaption,
         createdAtDate,
@@ -571,7 +559,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       mediaType = 'video';
     }
 
-    await sendMediaToDatabase(messageId, mediaGroupId, postMedia, mediaType);
+    await upsertMediaToDatabase(messageId, mediaGroupId, postMedia, mediaType);
   });
 
   //////////////////////////////////////////////////////////////////////////////////////
@@ -597,8 +585,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       let postCaption;
       let isNew;
       let isInStock;
-      let brand;
-      let sizes;
+      let brand = '';
+      let sizes = [];
       let itemType;
 
       postCaption = editedChannelPostData.caption;
@@ -610,14 +598,21 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       } else itemType = 'одяг';
 
       if (editedChannelPostData.caption.match(sizeRegExp)) {
-        sizes = editedChannelPostData
+        const channelPostSizes = editedChannelPostData.caption
           .match(sizeRegExp)
-          .map((size) => size.replace('#розмір_', ''))
-          .join(', ');
+          .map((size) => {
+            return size.replace('#розмір_', '');
+          });
+        sizes = channelPostSizes;
       }
 
       if (editedChannelPostData.caption.match(brandRegExp)) {
-        brand = editedChannelPostData.caption.match(brandRegExp);
+        brand = editedChannelPostData.caption
+          .match(brandRegExp)[0]
+          .replace('#бренд_', '')
+          .replace('_', ' ');
+
+        brand = brand.charAt(0).toUpperCase() + brand.slice(1);
       }
 
       isInStock = editedChannelPostData.caption.includes('#в_наявності');
@@ -638,9 +633,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .format('YYYY-MM-DD HH:mm:ssZ');
       }
 
-      await editPostInDatabase(
+      await upsertPostToDatabase(
         mediaGroupId,
         postCaption,
+        createdAtDate,
         editAtDate,
         isNew,
         isInStock,
@@ -656,7 +652,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       postMedia = editedChannelPostData.video.file_id;
     }
 
-    await editMediaInDatabase(messageId, mediaGroupId, postMedia, mediaType);
+    await upsertMediaToDatabase(messageId, mediaGroupId, postMedia, mediaType);
   });
 
   bot.start();
