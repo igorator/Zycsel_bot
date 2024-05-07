@@ -5,7 +5,7 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const upsertPostToDatabase = async (
+const updatePostDataToDatabase = async (
   mediaGroupId,
   postCaption,
   createdAtDate,
@@ -29,24 +29,18 @@ const upsertPostToDatabase = async (
       'sizes': sizes,
       'type': itemType,
     })
+    .eq('media-group-id', mediaGroupId)
     .select();
+
+  console.log(data, error);
 };
 
-const upsertMediaToDatabase = async (
-  messageId,
-  mediaGroupId,
-  postMedia,
-  mediaType,
-) => {
-  const { data, error } = await supabase
-    .from('Post-media')
-    .upsert({
-      'id': messageId,
-      'media-group-id': mediaGroupId,
-      'media-files': postMedia,
-      'media-type': mediaType,
-    })
-    .select();
+const upsertMediaToDatabase = async (messageId, mediaGroupId, mediaType) => {
+  const messageMedia = await supabase.from('Post-messages-media').upsert({
+    'id': messageId,
+    'media-group-id': mediaGroupId,
+    'media-type': mediaType,
+  });
 };
 
-module.exports = { upsertMediaToDatabase, upsertPostToDatabase };
+module.exports = { upsertMediaToDatabase, updatePostDataToDatabase };

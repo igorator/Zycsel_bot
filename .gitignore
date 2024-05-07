@@ -39,3 +39,5 @@ out
 storybook-static/
 
 app/
+media/
+csv_export/
