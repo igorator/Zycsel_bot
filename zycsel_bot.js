@@ -16,6 +16,7 @@ const {
   SHOES_SIZES,
   SIZE_REGEXP,
   BRAND_REGEXP,
+  TABLES,
 } = require('./components/constants');
 const { SCREEN_FACTORY } = require('./render/renderControls');
 const { hydrateFiles } = require('@grammyjs/files');
@@ -192,11 +193,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       ctx.session.brand,
     );
 
-    if (channelPosts.length > 0) {
+    if (channelPosts.length <= 0) {
       ctx.reply('За вашим запитом ще немає речей');
     } else {
       ctx.reply('Перелік речей за вашим запитом:');
-      // await renderChannelPosts(ctx, channelPosts);
+      await renderChannelPosts(ctx, channelPosts);
     }
   });
 
@@ -225,7 +226,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           ctx.reply('За вашим запитом ще немає речей');
         } else {
           ctx.reply('Перелік речей за вашим запитом:');
-          // await renderChannelPosts(ctx, channelPosts);
+          await renderChannelPosts(ctx, channelPosts);
         }
       });
     });
@@ -327,13 +328,13 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     }
 
     const isPostInDatabase = await supabase
-      .from('Zycsel-channel-posts-table')
+      .from(TABLES.postsTable)
       .select('messages-ids')
       .eq('media-group-id', mediaGroupId);
 
     if (isPostInDatabase.data.length <= 0) {
       const emptyPostMessagesIds = await supabase
-        .from('Zycsel-channel-posts-table')
+        .from(TABLES.postsTable)
         .insert({
           'media-group-id': mediaGroupId,
           'messages-ids': messageId,
@@ -354,7 +355,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       }
     } else {
       const existingPostMessageIds = await supabase
-        .from('Zycsel-channel-posts-table')
+        .from(TABLES.postsTable)
         .update({
           'messages-ids': [
             isPostInDatabase.data[0]['messages-ids'].split(' '),
@@ -488,7 +489,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       });
 
       const deleteMediaFromStorage = await supabase.storage
-        .from('Zycsel store media')
+        .from(TABLES.mediaStorage)
         .remove(currentMessagesIds);
     } else {
       currentMessagesIds = currentMessagesIds.data.forEach(async (id) => {

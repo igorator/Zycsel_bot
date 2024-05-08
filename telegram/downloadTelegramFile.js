@@ -17,7 +17,7 @@ const downloadTelegramPhoto = async (client, photo) => {
     }),
   );
 
-  return photoFile;
+  return photoFile.bytes;
 };
 
 const downloadTelegramVideo = async (client, video) => {

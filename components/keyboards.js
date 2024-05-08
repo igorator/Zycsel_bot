@@ -42,12 +42,7 @@ const brandKeyboard = (brands) => {
     return [Keyboard.text(label)];
   });
 
-  brandButtons.unshift(
-    [Keyboard.text('Назад')],
-    [Keyboard.text('Всі бренди')],
-    [Keyboard.text('Stone Island')],
-    [Keyboard.text('Cp Company')],
-  );
+  brandButtons.unshift([Keyboard.text('Назад')], [Keyboard.text('Всі бренди')]);
 
   const brandsKeyboard = Keyboard.from(brandButtons)
     .resized()

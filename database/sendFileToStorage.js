@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { TABLES } = require('../components/constants');
 const fetch = (...args) =>
   import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
@@ -14,7 +15,7 @@ const uploadPhotoToStorage = async (ctx, id) => {
   photoFile = Buffer.from(await photoFile.arrayBuffer());
 
   const sendedPhoto = await supabase.storage
-    .from('Zycsel store media')
+    .from(TABLES.mediaStorage)
     .upload(`/${id}.jpg`, photoFile, {
       cacheControl: '3600',
       contentType: 'image/jpg',
@@ -28,7 +29,7 @@ const uploadVideoToStorage = async (ctx, id) => {
   videoFile = Buffer.from(await videoFile.arrayBuffer());
 
   const sendedVideo = await supabase.storage
-    .from('Zycsel store media')
+    .from(TABLES.mediaStorage)
     .upload(`/${id}.mp4`, videoFile, {
       cacheControl: '3600',
       contentType: 'video/mp4',

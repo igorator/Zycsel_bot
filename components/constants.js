@@ -1,3 +1,10 @@
+const TABLES = {
+  postsTable: 'Zycsel-channel-posts-table',
+  messagesIdsTable: 'Post-messages-media',
+  brandsTable: 'Post-brands',
+  mediaStorage: 'channel-messages-media',
+};
+
 //screens
 
 const SCREENS = {
@@ -31,7 +38,9 @@ const CLOTHING_SIZES = [
 ];
 const SHOES_SIZES = [
   '40',
+  '40_5',
   '41',
+  '41_5',
   '42',
   '42_5',
   '43',
@@ -41,6 +50,7 @@ const SHOES_SIZES = [
   '45',
   '45_5',
   '46',
+  '46_5',
   '47',
 ];
 
@@ -52,6 +62,7 @@ const SIZE_REGEXP =
 const BRAND_REGEXP = /#бренд_\w+/;
 
 module.exports = {
+  TABLES,
   SCREENS,
   ITEMS_TYPES,
   CLOTHING_SIZES,

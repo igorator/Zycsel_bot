@@ -31,8 +31,6 @@ const updatePostDataToDatabase = async (
     })
     .eq('media-group-id', mediaGroupId)
     .select();
-
-  console.log(data, error);
 };
 
 const upsertMediaToDatabase = async (messageId, mediaGroupId, mediaType) => {

@@ -12,10 +12,6 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const input = require('input');
 const moment = require('moment');
-const {
-  downloadTelegramPhoto,
-  downloadTelegramVideo,
-} = require('./downloadTelegramFile');
 const { SIZE_REGEXP, BRAND_REGEXP } = require('../components/constants');
 
 const apiId = +process.env.TELEGRAM_APP_ID;
@@ -30,7 +26,7 @@ const clientMan = new TelegramClient(stringSessionMan, apiId, apiHash, {
   connectionRetries: 5,
 });
 
-loginClient = async () => {
+const loginClient = async () => {
   await clientMan.start({
     phoneNumber: async () => await input.text('number ?'),
     password: async () => await input.text('password?'),
@@ -39,15 +35,17 @@ loginClient = async () => {
   });
 };
 
+const sleep = (ms) => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+module.exports = { sleep };
+
 (async () => {
   await clientMan.connect();
 
   if (!clientMan) {
     loginClient();
-  }
-
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   const PostsCsvConfig = mkConfig({
@@ -79,7 +77,7 @@ loginClient = async () => {
   const mediaIdsDataFiltered = [];
   let brandsDataFiltered = [];
 
-  for (i = 85; i > 0; i--) {
+  for (i = 100; i > 0; i--) {
     let limit = 3000;
     let channelMessages;
     console.log('limit', limit);
@@ -246,23 +244,9 @@ loginClient = async () => {
 
   await saveCsvFileToDisk(
     mediaIdsCsvConfig,
-    'csv_export',
+    'export/csv',
     mediaIdsDataFiltered,
   );
-  await saveCsvFileToDisk(PostsCsvConfig, 'csv_export', postsDataFiltered);
-  await saveCsvFileToDisk(BrandsCsvConfig, 'csv_export', brandsDataFiltered);
-
-  //postsDataFiltered.forEach
-
-  // if (message.media.photo) {
-  //   mediaType = 'photo';
-  //   const photo = await downloadTelegramPhoto(clientMan, message.media.photo);
-  // } else if (message.media.document) {
-  //   mediaType = 'video';
-
-  //   const video = await downloadTelegramVideo(
-  //     clientMan,
-  //     message.media.document,
-  //   );
-  // }
+  await saveCsvFileToDisk(PostsCsvConfig, 'export/csv', postsDataFiltered);
+  await saveCsvFileToDisk(BrandsCsvConfig, 'export/csv', brandsDataFiltered);
 })();

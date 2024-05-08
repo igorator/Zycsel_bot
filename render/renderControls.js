@@ -57,11 +57,9 @@ const renderSizeControls = async (ctx) => {
       .eq('type', ITEMS_TYPES.shoes);
   }
 
-  sizeButtons = sizeButtons.data
-    .map((element) => element.sizes)
-    .flatMap((subArray) => subArray);
-
-  sizeButtons = Array.from(new Set(sizeButtons));
+  sizeButtons = sizeButtons.data.flatMap((element) =>
+    element.sizes.replace(/[{}]/g, '').split(' '),
+  );
 
   if (ctx.session.type === ITEMS_TYPES.clothes) {
     sizeButtons = CLOTHING_SIZES.filter((label) => sizeButtons.includes(label));
@@ -88,34 +86,38 @@ const renderBrandControls = async (ctx) => {
       .from('Zycsel-channel-posts-table')
       .select('brand')
       .eq('type', ITEMS_TYPES.accessories)
+      .eq('is-in-stock', true)
       .eq('is-new', ctx.session.isNew);
   } else if (ctx.session.type === ITEMS_TYPES.clothes) {
     brandButtons = await supabase
       .from('Zycsel-channel-posts-table')
       .select('brand')
       .eq('type', ITEMS_TYPES.clothes)
+      .eq('is-in-stock', true)
       .eq('is-new', ctx.session.isNew)
-      .contains('sizes', [ctx.session.size]);
+      .textSearch('sizes', `${ctx.session.size}`);
   } else if (ctx.session.type === ITEMS_TYPES.shoes) {
     brandButtons = await supabase
       .from('Zycsel-channel-posts-table')
       .select('brand')
       .eq('type', ITEMS_TYPES.shoes)
-      .contains('sizes', [ctx.session.size]);
+      .eq('is-in-stock', true)
+      .textSearch('sizes', `${ctx.session.size}`);
   }
+
   brandButtons = brandButtons.data.map((element) => element.brand);
 
   brandButtons = brandButtons.flatMap((subArray) => subArray);
 
   brandButtons = Array.from(new Set(brandButtons));
 
-  brandButtons = brandButtons.filter(
-    (element) => !['Stone Island', 'Cp Company'].includes(element),
-  );
-
-  brandButtons = brandButtons.sort();
-
-  brandButtons = brandButtons;
+  brandButtons = brandButtons.sort((a, b) => {
+    if (a === 'Stone Island') return -1;
+    if (b === 'Stone Island') return 1;
+    if (a === 'Cp Company') return -1;
+    if (b === 'Cp Company') return 1;
+    return a.localeCompare(b);
+  });
 
   const msgReply = `Вы обрали ${ctx.match}. Оберіть бренд`;
   await ctx.reply(msgReply, {

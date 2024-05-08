@@ -18,9 +18,13 @@ const getChannelPosts = async (isNew, type, size, brand) => {
   }
 
   if (size !== '') {
-    query = query.contains('sizes', [size]);
+    query = query.textSearch('sizes', `${size}`);
   }
 
+  console.log(brand);
+  console.log(type);
+  console.log(isNew);
+  console.log(size);
   const { data, error } = await query;
 
   return data;
