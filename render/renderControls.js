@@ -1,4 +1,5 @@
 const {
+  TABLES,
   SCREENS,
   ITEMS_TYPES,
   CLOTHING_SIZES,
@@ -46,19 +47,21 @@ const renderSizeControls = async (ctx) => {
   let sizeButtons;
   if (ctx.session.type === ITEMS_TYPES.clothes) {
     sizeButtons = await supabase
-      .from('Zycsel-channel-posts-table')
+      .from(TABLES.postsTable)
       .select('sizes')
+      .eq('is-in-stock', true)
       .eq('type', ITEMS_TYPES.clothes)
       .eq('is-new', ctx.session.isNew);
   } else if (ctx.session.type === ITEMS_TYPES.shoes) {
     sizeButtons = await supabase
-      .from('Zycsel-channel-posts-table')
+      .from(TABLES.postsTable)
       .select('sizes')
+      .eq('is-in-stock', true)
       .eq('type', ITEMS_TYPES.shoes);
   }
 
   sizeButtons = sizeButtons.data.flatMap((element) =>
-    element.sizes.replace(/[{}]/g, '').split(' '),
+    element.sizes.replace(/[""]/g, '').split(' '),
   );
 
   if (ctx.session.type === ITEMS_TYPES.clothes) {
@@ -83,26 +86,26 @@ const renderBrandControls = async (ctx) => {
   let brandButtons;
   if (ctx.session.type === ITEMS_TYPES.accessories) {
     brandButtons = await supabase
-      .from('Zycsel-channel-posts-table')
+      .from(TABLES.postsTable)
       .select('brand')
       .eq('type', ITEMS_TYPES.accessories)
       .eq('is-in-stock', true)
       .eq('is-new', ctx.session.isNew);
   } else if (ctx.session.type === ITEMS_TYPES.clothes) {
     brandButtons = await supabase
-      .from('Zycsel-channel-posts-table')
+      .from(TABLES.postsTable)
       .select('brand')
       .eq('type', ITEMS_TYPES.clothes)
       .eq('is-in-stock', true)
       .eq('is-new', ctx.session.isNew)
-      .textSearch('sizes', `${ctx.session.size}`);
+      .ilike('sizes', `"${ctx.session.size}"`);
   } else if (ctx.session.type === ITEMS_TYPES.shoes) {
     brandButtons = await supabase
-      .from('Zycsel-channel-posts-table')
+      .from(TABLES.postsTable)
       .select('brand')
       .eq('type', ITEMS_TYPES.shoes)
       .eq('is-in-stock', true)
-      .textSearch('sizes', `${ctx.session.size}`);
+      .ilike('sizes', `"${ctx.session.size}"`);
   }
 
   brandButtons = brandButtons.data.map((element) => element.brand);
@@ -110,6 +113,10 @@ const renderBrandControls = async (ctx) => {
   brandButtons = brandButtons.flatMap((subArray) => subArray);
 
   brandButtons = Array.from(new Set(brandButtons));
+
+  brandButtons = brandButtons.filter(
+    (element) => element && element !== 'null' && element !== 'Null',
+  );
 
   brandButtons = brandButtons.sort((a, b) => {
     if (a === 'Stone Island') return -1;

@@ -17,7 +17,7 @@ const updatePostDataToDatabase = async (
   itemType,
 ) => {
   const { data, error } = await supabase
-    .from('Zycsel-channel-posts-table')
+    .from(TABLES.postsTable)
     .upsert({
       'media-group-id': mediaGroupId,
       'post-caption': postCaption,

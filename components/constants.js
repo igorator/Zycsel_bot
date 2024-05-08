@@ -1,5 +1,5 @@
 const TABLES = {
-  postsTable: 'Zycsel-channel-posts-table',
+  postsTable: 'Channel-posts',
   messagesIdsTable: 'Post-messages-media',
   brandsTable: 'Post-brands',
   mediaStorage: 'channel-messages-media',

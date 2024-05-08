@@ -60,7 +60,8 @@ const renderChannelPosts = async (ctx, channelPosts) => {
 
   for (const post of postsToRender) {
     console.log(post);
-    await ctx.api.sendMediaGroup(post);
+    await ctx.replyWithMediaGroup(post);
+    await new Promise((resolve) => setTimeout(resolve, 500));
     break;
   }
 };

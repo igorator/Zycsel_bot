@@ -277,9 +277,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .match(SIZE_REGEXP)
           .map((size) => {
             size = size.replace('#розмір_', '');
-            return `{${size}}`;
+            return `"${size}"`;
           })
-          .join(' ');
+          .join(',');
 
         sizes = channelPostSizes;
       }
@@ -360,7 +360,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           'messages-ids': [
             isPostInDatabase.data[0]['messages-ids'].split(' '),
             messageId,
-          ].join(', '),
+          ].join(','),
         })
         .eq('media-group-id', mediaGroupId);
 
@@ -428,9 +428,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .match(SIZE_REGEXP)
           .map((size) => {
             size = size.replace('#розмір_', '');
-            return `{${size}}`;
+            return `"${size}"`;
           })
-          .join(' ');
+          .join(',');
         sizes = channelPostSizes;
       }
 

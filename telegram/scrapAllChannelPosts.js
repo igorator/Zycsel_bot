@@ -146,9 +146,9 @@ module.exports = { sleep };
             .match(SIZE_REGEXP)
             .map((size) => {
               size = size.replace('#розмір_', '');
-              return `{${size}}`;
+              return `"${size}"`;
             })
-            .join(' ');
+            .join(',');
 
           sizes = channelPostSizes;
         }
@@ -230,7 +230,7 @@ module.exports = { sleep };
           (data) => data.mediaGroupId === message.mediaGroupId,
         )
           .map((data) => data.id)
-          .join(', '),
+          .join(','),
         'created-at-date': message.createdAtDate,
         'edited-at-date': message.editAtDate,
       });
