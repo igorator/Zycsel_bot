@@ -17,6 +17,7 @@ const {
   SIZE_REGEXP,
   BRAND_REGEXP,
   TABLES,
+  BUTTONS_ICONS,
 } = require('./components/constants');
 const { SCREEN_FACTORY } = require('./render/renderControls');
 const { hydrateFiles } = require('@grammyjs/files');
@@ -201,38 +202,29 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     }
   });
 
-  let brands = await supabase.from('Post-brands').select('brand');
+  const brandsRegExp = new RegExp(`[\\p{${BUTTONS_ICONS.brandsIcon}}]`);
 
-  brands = brands.data
-    .map((element) => element.brand)
-    .flatMap((subArray) => subArray);
+  bot.hears(brandsRegExp, async (ctx) => {
+    ctx.session.brand = ctx.match.input.replace(BUTTONS_ICONS.brandsIcon, '');
+    ctx.session.screen = SCREENS.itemsSearchSelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
+    renderControls(ctx);
 
-  const botOnBrandEvents = async (brands) => {
-    brands.map((label) => {
-      return bot.hears(label, async (ctx) => {
-        ctx.session.brand = label;
-        ctx.session.screen = SCREENS.itemsSearchSelection;
-        const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
-        renderControls(ctx);
+    const channelPosts = await getChannelPosts(
+      ctx.session.isNew,
+      ctx.session.type,
+      ctx.session.size,
+      ctx.session.brand,
+    );
 
-        const channelPosts = await getChannelPosts(
-          ctx.session.isNew,
-          ctx.session.type,
-          ctx.session.size,
-          ctx.session.brand,
-        );
+    if (channelPosts.length <= 0) {
+      ctx.reply('За вашим запитом ще немає речей');
+    } else {
+      ctx.reply('Перелік речей за вашим запитом:');
+      await renderChannelPosts(ctx, channelPosts);
+    }
+  });
 
-        if (channelPosts.length <= 0) {
-          ctx.reply('За вашим запитом ще немає речей');
-        } else {
-          ctx.reply('Перелік речей за вашим запитом:');
-          await renderChannelPosts(ctx, channelPosts);
-        }
-      });
-    });
-  };
-
-  await botOnBrandEvents(brands);
   ///////////////////////////////////////////////////////////////////////////////////////////////
 
   bot.hears('Знайти інші речі', async (ctx) => {
@@ -277,9 +269,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .match(SIZE_REGEXP)
           .map((size) => {
             size = size.replace('#розмір_', '');
-            return `"${size}"`;
+            return ` ${size} `;
           })
-          .join(',');
+          .join(' ');
 
         sizes = channelPostSizes;
       }
@@ -428,7 +420,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .match(SIZE_REGEXP)
           .map((size) => {
             size = size.replace('#розмір_', '');
-            return `"${size}"`;
+            return ` ${size} `;
           })
           .join(',');
         sizes = channelPostSizes;

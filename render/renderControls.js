@@ -4,6 +4,7 @@ const {
   ITEMS_TYPES,
   CLOTHING_SIZES,
   SHOES_SIZES,
+  BUTTONS_ICONS,
 } = require('../components/constants');
 const {
   qualityKeyboard,
@@ -98,17 +99,19 @@ const renderBrandControls = async (ctx) => {
       .eq('type', ITEMS_TYPES.clothes)
       .eq('is-in-stock', true)
       .eq('is-new', ctx.session.isNew)
-      .ilike('sizes', `"${ctx.session.size}"`);
+      .ilike('sizes', `% ${ctx.session.size} %`);
   } else if (ctx.session.type === ITEMS_TYPES.shoes) {
     brandButtons = await supabase
       .from(TABLES.postsTable)
       .select('brand')
       .eq('type', ITEMS_TYPES.shoes)
       .eq('is-in-stock', true)
-      .ilike('sizes', `"${ctx.session.size}"`);
+      .ilike('sizes', `% ${ctx.session.size} %`);
   }
 
-  brandButtons = brandButtons.data.map((element) => element.brand);
+  brandButtons = brandButtons.data.map(
+    (element) => `${BUTTONS_ICONS.brandsIcon}${element.brand}`,
+  );
 
   brandButtons = brandButtons.flatMap((subArray) => subArray);
 
@@ -119,10 +122,10 @@ const renderBrandControls = async (ctx) => {
   );
 
   brandButtons = brandButtons.sort((a, b) => {
-    if (a === 'Stone Island') return -1;
-    if (b === 'Stone Island') return 1;
-    if (a === 'Cp Company') return -1;
-    if (b === 'Cp Company') return 1;
+    if (a === `${BUTTONS_ICONS.brandsIcon}Stone Island`) return -1;
+    if (b === `${BUTTONS_ICONS.brandsIcon}Stone Island`) return 1;
+    if (a === `${BUTTONS_ICONS.brandsIcon}Cp Company`) return -1;
+    if (b === `${BUTTONS_ICONS.brandsIcon}Cp Company`) return 1;
     return a.localeCompare(b);
   });
 
@@ -138,7 +141,7 @@ const renderItemsSearchControls = async (ctx) => {
   const msgReply =
     ctx.match === 'Всі бренди'
       ? 'Ви обрали всі бренди'
-      : `Ви обрали бренд ${ctx.match}`;
+      : `Ви обрали бренд ${ctx.match.input}`;
 
   await ctx.reply(msgReply, {
     reply_markup: itemsSearchKeyboard,

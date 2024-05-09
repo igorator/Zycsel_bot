@@ -37,16 +37,19 @@ const renderChannelPosts = async (ctx, channelPosts) => {
       } else if (type['media-type'] === 'video') {
         let videoUrl = await supabase.storage
           .from(TABLES.mediaStorage)
-          .getPublicUrl(`${type.id}.mp4`);
+          .getPublicUrl(`${60000}.mp4`);
 
-        videoUrl = videoUrl.data.publicUrl;
-
-        if (channelPost.length <= 0) {
-          media = InputMediaBuilder.video(videoUrl, {
-            caption: post['post-caption'].replace(/@/g, '\n'),
-          });
+        if (videoUrl) {
+          videoUrl = videoUrl.data.publicUrl;
+          if (channelPost.length <= 0) {
+            media = InputMediaBuilder.video(videoUrl, {
+              caption: post['post-caption'].replace(/@/g, '\n'),
+            });
+          } else {
+            media = InputMediaBuilder.video(videoUrl);
+          }
         } else {
-          media = InputMediaBuilder.video(videoUrl);
+          continue;
         }
       }
 
@@ -58,11 +61,19 @@ const renderChannelPosts = async (ctx, channelPosts) => {
     postsToRender.push(channelPost);
   }
 
-  for (const post of postsToRender) {
-    console.log(post);
-    await ctx.replyWithMediaGroup(post);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    break;
+  try {
+    for (const post of postsToRender) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        console.log(post);
+        await ctx.replyWithMediaGroup(post);
+      } catch (error) {
+        console.log(error);
+        continue;
+      }
+    }
+  } finally {
+    ctx.reply('Це всі речі за вашим запитом');
   }
 };
 module.exports = { renderChannelPosts };

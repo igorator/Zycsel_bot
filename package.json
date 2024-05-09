@@ -29,5 +29,8 @@
     "node-fetch": "^3.3.2",
     "nodemon": "^3.1.0",
     "telegram": "^2.20.10"
+  },
+  "devDependencies": {
+    "supabase": "^1.165.0"
   }
 }

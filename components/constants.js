@@ -1,7 +1,10 @@
+const BUTTONS_ICONS = {
+  brandsIcon: '\u200C',
+};
+
 const TABLES = {
   postsTable: 'Channel-posts',
   messagesIdsTable: 'Post-messages-media',
-  brandsTable: 'Post-brands',
   mediaStorage: 'channel-messages-media',
 };
 
@@ -62,6 +65,7 @@ const SIZE_REGEXP =
 const BRAND_REGEXP = /#бренд_\w+/;
 
 module.exports = {
+  BUTTONS_ICONS,
   TABLES,
   SCREENS,
   ITEMS_TYPES,

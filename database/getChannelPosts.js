@@ -12,17 +12,20 @@ const getChannelPosts = async (isNew, type, size, brand) => {
     .select('*')
     .eq('is-in-stock', true)
     .eq('is-new', isNew)
-    .eq('type', type);
+    .eq('type', type)
+    .order('created-at-date', { ascending: true });
 
   if (brand !== '') {
     query = query.eq('brand', brand);
   }
 
   if (size !== '') {
-    query = query.ilike('sizes', `"${size}"`);
+    query = query.ilike('sizes', `% ${size} %`);
   }
 
   const { data, error } = await query;
+
+  console.log(data);
 
   return data;
 };
