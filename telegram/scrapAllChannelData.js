@@ -1,20 +1,5 @@
 require('dotenv').config();
 
-const {
-  downloadTelegramPhoto,
-  downloadTelegramVideo,
-} = require('./downloadTelegramFile');
-
-const csv = require('csvtojson');
-
-let mkConfig, generateCsv, asString;
-import('export-to-csv').then(
-  ({ mkConfig: mkCfg, generateCsv: genCsv, asString: asStr }) => {
-    mkConfig = mkCfg;
-    generateCsv = genCsv;
-    asString = asStr;
-  },
-);
 const fs = require('fs');
 const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
@@ -43,11 +28,20 @@ const loginClient = async () => {
   });
 };
 
+const saveDataToFile = (data, filePath) => {
+  const jsonData = JSON.stringify(data, null, 2);
+  fs.writeFile(filePath, jsonData, (err) => {
+    if (err) {
+      console.error('Error writing JSON file:', err);
+    } else {
+      console.log('Data saved to', filePath);
+    }
+  });
+};
+
 const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
-
-module.exports = { sleep };
 
 (async () => {
   await clientMan.connect();
@@ -56,35 +50,9 @@ module.exports = { sleep };
     loginClient();
   }
 
-  const PostsCsvConfig = mkConfig({
-    filename: 'Posts',
-    useKeysAsHeaders: true,
-  });
-  const mediaIdsCsvConfig = mkConfig({
-    filename: 'MessagesIds',
-    useKeysAsHeaders: true,
-  });
-  const BrandsCsvConfig = mkConfig({
-    filename: 'Brands',
-    useKeysAsHeaders: true,
-  });
-
-  const saveCsvFileToDisk = async (config, path, data) => {
-    const csv = generateCsv(config)(data);
-    const filename = `${config.filename}.csv`;
-    const csvBuffer = new Uint8Array(Buffer.from(asString(csv)));
-
-    fs.writeFile(`${path}/${filename}`, csvBuffer, (err) => {
-      if (err) throw err;
-      console.log('file saved: ', filename);
-    });
-  };
-
   const scrapAllChannelPosts = async () => {
     const ALL_DATA = [];
     const postsDataFiltered = [];
-    const mediaIdsDataFiltered = [];
-    let brandsDataFiltered = [];
 
     for (i = 100; i > 0; i--) {
       let limit = 3000;
@@ -117,10 +85,9 @@ module.exports = { sleep };
       channelMessages.forEach(async (message) => {
         let mediaGroupId = null;
         let messageId = null;
-        let mediaType = null;
         let postMessage = null;
-        let isNew = null;
         let isInStock = null;
+        let isNew = null;
         let createdAtDate = null;
         let editAtDate = null;
         let brand = null;
@@ -128,7 +95,7 @@ module.exports = { sleep };
         let sizes = null;
 
         if (message.id) {
-          messageId = message.id.toString();
+          messageId = message.id;
         }
 
         if (message.groupedId) {
@@ -154,10 +121,8 @@ module.exports = { sleep };
             const channelPostSizes = message.message
               .match(SIZE_REGEXP)
               .map((size) => {
-                size = size.replace('#розмір_', '');
-                return ` ${size} `;
-              })
-              .join(',');
+                return (size = size.replace('#розмір_', ''));
+              });
 
             sizes = channelPostSizes;
           }
@@ -204,7 +169,6 @@ module.exports = { sleep };
           brand: brand,
           size: sizes,
           itemType: itemType,
-          mediaType: mediaType,
           createdAtDate: createdAtDate,
           editedAtDate: editAtDate,
         });
@@ -214,140 +178,24 @@ module.exports = { sleep };
     }
 
     ALL_DATA.forEach((message) => {
-      // Фильтрация по бренду
-      if (message.brand) {
-        brandsDataFiltered.push({ 'brand': message.brand });
-      }
-
-      // Фильтрация по медиа-идентификаторам
-      mediaIdsDataFiltered.push({
-        'id': message.id,
-        'media-group-id': message.mediaGroupId,
-        'media-type': message.mediaType,
-      });
-
-      // Фильтрация данных только с товарами в наличии
       if (message.isInStock) {
         postsDataFiltered.push({
           'media-group-id': message.mediaGroupId,
-          'post-caption': message.postCaption,
-          'is-in-stock': message.isInStock,
+          'messages-ids': ALL_DATA.filter(
+            (data) => data.mediaGroupId === message.mediaGroupId,
+          ).map((data) => data.id),
           'is-new': message.isNew,
           'brand': message.brand,
           'sizes': message.size,
           'type': message.itemType,
-          'messages-ids': ALL_DATA.filter(
-            (data) => data.mediaGroupId === message.mediaGroupId,
-          )
-            .map((data) => data.id)
-            .join(','),
           'created-at-date': message.createdAtDate,
           'edited-at-date': message.editAtDate,
         });
       }
     });
 
-    brandsDataFiltered = brandsDataFiltered.filter(
-      (value, index, self) =>
-        index === self.findIndex((t) => t.brand === value.brand),
-    );
-
-    await saveCsvFileToDisk(
-      mediaIdsCsvConfig,
-      'export/csv',
-      mediaIdsDataFiltered,
-    );
-    await saveCsvFileToDisk(PostsCsvConfig, 'export/csv', postsDataFiltered);
-    await saveCsvFileToDisk(BrandsCsvConfig, 'export/csv', brandsDataFiltered);
-  };
-
-  //////////////////////////////////////////////////////////////////////////////////////////////
-
-  const scrapAllChannelMedia = () => {
-    csv()
-      .fromFile('export/csv/Posts.csv')
-      .then(async (posts) => {
-        let messagesIds = [];
-        posts.forEach((post) => {
-          messagesIds.push(post['messages-ids'].split(','));
-        });
-        messagesIds = messagesIds
-          .flat()
-          .map((id) => {
-            return parseInt(id);
-          })
-          .sort()
-          .reverse()
-          .splice(0, messagesIds.length);
-
-        console.log(messagesIds.length);
-
-        const chunkSize = 200;
-        const chunks = [];
-        for (let i = 0; i < messagesIds.length; i += chunkSize) {
-          chunks.push(messagesIds.slice(i, i + chunkSize));
-        }
-
-        let countdown = messagesIds.length;
-
-        async function processChunks(chunks) {
-          for (const chunk of chunks) {
-            const messages = await clientMan.invoke(
-              new Api.channels.GetMessages({
-                channel: channelId,
-                id: chunk,
-              }),
-            );
-
-            for (const message of messages.messages) {
-              countdown -= 1;
-              console.log((messagesIds.length -= 1));
-              await sleep(100);
-
-              if (message.media.photo) {
-                const photo = await downloadTelegramPhoto(
-                  clientMan,
-                  message.media.photo,
-                );
-
-                fs.writeFile(
-                  `export/media/${message.id}.jpg`,
-                  Buffer.from(photo),
-                  {
-                    encoding: 'binary',
-                    flag: 'w',
-                    mode: 0o666,
-                    contentType: 'image/jpg',
-                  },
-                  () => {},
-                );
-              } else if (message.media.document) {
-                mediaType = 'video';
-                const video = await downloadTelegramVideo(
-                  clientMan,
-                  message.media.document,
-                );
-
-                fs.writeFile(
-                  `export/media/${message.id}.mp4`,
-                  Buffer.from(video),
-                  {
-                    encoding: 'binary',
-                    flag: 'w',
-                    mode: 0o666,
-                    contentType: 'video/mp4',
-                  },
-                  () => {},
-                );
-              }
-            }
-          }
-        }
-
-        await processChunks(chunks);
-      });
+    saveDataToFile(postsDataFiltered, 'posts/posts.json');
   };
 
   await scrapAllChannelPosts();
-  //await scrapAllChannelMedia();
 })();

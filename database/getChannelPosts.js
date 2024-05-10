@@ -25,8 +25,6 @@ const getChannelPosts = async (isNew, type, size, brand) => {
 
   const { data, error } = await query;
 
-  console.log(data);
-
   return data;
 };
 

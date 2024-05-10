@@ -1,4 +1,3 @@
-const { InputMediaBuilder } = require('grammy');
 const { createClient } = require('@supabase/supabase-js');
 const { TABLES } = require('../components/constants');
 
@@ -7,70 +6,44 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+CHANNEL_ID = process.env.CHANNEL_ID;
+
 const renderChannelPosts = async (ctx, channelPosts) => {
-  const postsToRender = [];
+  let postsToRender = [];
+  let currentChunk = []; // Создаем массив для текущего чанка
+  let currentChunkSize = 0;
 
   for (const post of channelPosts) {
-    const channelPost = [];
-
-    const mediaTypes = await supabase
+    let messagesIds = await supabase
       .from(TABLES.messagesIdsTable)
-      .select('id, media-type')
+      .select('id, media-group-id')
       .eq('media-group-id', post['media-group-id']);
 
-    for (const type of mediaTypes.data) {
-      let media;
+    messagesIds = messagesIds.data
+      .map((message) => parseInt(message.id))
+      .sort();
 
-      if (type['media-type'] === 'photo') {
-        let photoUrl = await supabase.storage
-          .from(TABLES.mediaStorage)
-          .getPublicUrl(`${type.id}.jpg`);
-
-        photoUrl = photoUrl.data.publicUrl;
-        if (channelPost.length <= 0) {
-          media = InputMediaBuilder.photo(photoUrl, {
-            caption: post['post-caption'].replace(/@/g, '\n'),
-          });
-        } else {
-          media = InputMediaBuilder.photo(photoUrl);
-        }
-      } else if (type['media-type'] === 'video') {
-        let videoUrl = await supabase.storage
-          .from(TABLES.mediaStorage)
-          .getPublicUrl(`${60000}.mp4`);
-
-        if (videoUrl) {
-          videoUrl = videoUrl.data.publicUrl;
-          if (channelPost.length <= 0) {
-            media = InputMediaBuilder.video(videoUrl, {
-              caption: post['post-caption'].replace(/@/g, '\n'),
-            });
-          } else {
-            media = InputMediaBuilder.video(videoUrl);
-          }
-        } else {
-          continue;
-        }
-      }
-
-      if (media) {
-        channelPost.push(media);
-      }
+    // Если добавление этих сообщений приведет к превышению лимита в 30, создаем новый чанк
+    if (currentChunkSize + messagesIds.length > 25) {
+      postsToRender.push(currentChunk); // Добавляем текущий чанк
+      currentChunk = []; // Обнуляем текущий чанк
+      currentChunkSize = 0;
     }
 
-    postsToRender.push(channelPost);
+    currentChunk.push(...messagesIds); // Добавляем сообщения в текущий чанк
+    currentChunkSize += messagesIds.length; // Обновляем размер текущего чанка
   }
 
+  // Добавляем последний чанк, если он не пустой
+  if (currentChunk.length > 0) {
+    postsToRender.push(currentChunk);
+  }
+
+  // Отправляем чанки сообщений
   try {
-    for (const post of postsToRender) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      try {
-        console.log(post);
-        await ctx.replyWithMediaGroup(post);
-      } catch (error) {
-        console.log(error);
-        continue;
-      }
+    for (const chunk of postsToRender) {
+      ctx.api.forwardMessages(ctx.chat.id, CHANNEL_ID, chunk);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   } finally {
     ctx.reply('Це всі речі за вашим запитом');

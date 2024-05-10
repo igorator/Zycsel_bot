@@ -38,5 +38,6 @@ dist
 out
 storybook-static/
 
+posts/
 app/
 export/
