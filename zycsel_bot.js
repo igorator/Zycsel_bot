@@ -397,6 +397,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     let brand = '';
     let sizes = [];
     let itemType;
+    let createdAtDate;
 
     if (editedChannelPostData.message_id) {
       messageId = editedChannelPostData.message_id;
