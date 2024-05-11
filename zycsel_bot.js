@@ -1,14 +1,12 @@
 require('dotenv').config();
-const { getChannelPosts } = require('./database/getChannelPosts');
-const { renderChannelPosts } = require('./render/renderChannelPosts');
-const {
-  updatePostDataToDatabase,
-  upsertMediaToDatabase,
-} = require('./database/postToDatabase');
 const moment = require('moment');
-const { Bot, GrammyError, HttpError, session } = require('grammy');
-const { createClient } = require('@supabase/supabase-js');
 
+const { getAllChannelPosts } = require('./database/getAllChannelPosts');
+const { renderChannelPosts } = require('./render/renderChannelPosts');
+const { upsertMessage } = require('./database/upsertMessage');
+
+const { Bot, GrammyError, HttpError, session } = require('grammy');
+const { SCREEN_FACTORY } = require('./render/renderControls');
 const {
   SCREENS,
   ITEMS_TYPES,
@@ -16,26 +14,11 @@ const {
   SHOES_SIZES,
   SIZE_REGEXP,
   BRAND_REGEXP,
-  TABLES,
   BUTTONS_ICONS,
 } = require('./components/constants');
-const { SCREEN_FACTORY } = require('./render/renderControls');
-const { hydrateFiles } = require('@grammyjs/files');
-const {
-  sendFileToStorage,
-  uploadPhotoToStorage,
-  uploadVideoToStorage,
-} = require('./database/sendFileToStorage');
-const { upsertBrandToDatabase } = require('./database/upsertBrandToDatabase');
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 (async () => {
   const bot = new Bot(process.env.BOT_AUTH_TOKEN);
-  bot.api.config.use(hydrateFiles(process.env.BOT_AUTH_TOKEN));
 
   bot.catch((err) => {
     const errorContext = err.ctx;
@@ -53,11 +36,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
   function initial() {
     return {
-      screen: '',
-      isNew: true,
+      screen: null,
+      isNew: null,
+      size: null,
+      brand: null,
       type: ITEMS_TYPES.clothes,
-      size: '',
-      brand: '',
     };
   }
 
@@ -187,11 +170,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
     renderControls(ctx);
 
-    const channelPosts = await getChannelPosts(
-      ctx.session.isNew,
+    const channelPosts = await getAllChannelPosts(
       ctx.session.type,
+      ctx.session.isNew,
       ctx.session.size,
-      ctx.session.brand,
+      null,
     );
 
     if (channelPosts.length <= 0) {
@@ -210,9 +193,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
     renderControls(ctx);
 
-    const channelPosts = await getChannelPosts(
-      ctx.session.isNew,
+    const channelPosts = await getAllChannelPosts(
       ctx.session.type,
+      ctx.session.isNew,
       ctx.session.size,
       ctx.session.brand,
     );
@@ -243,20 +226,24 @@ const supabase = createClient(supabaseUrl, supabaseKey);
   bot.on('channel_post:media', async (ctx) => {
     const channelPostData = ctx.update.channel_post;
 
-    let messageId;
-    let mediaGroupId;
-    let mediaType;
-    let postCaption;
-    let isNew;
-    let isInStock;
-    let createdAtDate;
-    let editAtDate;
-    let brand;
-    let itemType;
+    let mediaGroupId = null;
+    let messageId = null;
+    let isInStock = null;
+    let itemType = null;
+    let isNew = null;
     let sizes = [];
+    let brand = null;
+    let createdAtDate = null;
+    let editAtDate = null;
 
     if (channelPostData.caption) {
-      postCaption = channelPostData.caption;
+      isInStock =
+        channelPostData.caption.includes('#в_наявності') ||
+        !channelPostData.caption.includes('ПРОДАНО');
+
+      isNew =
+        channelPostData.caption.includes('#нове') ||
+        channelPostData.caption.includes('Нова');
 
       if (channelPostData.caption.includes('#взуття')) {
         itemType = ITEMS_TYPES.shoes;
@@ -265,15 +252,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       } else itemType = ITEMS_TYPES.clothes;
 
       if (channelPostData.caption.match(SIZE_REGEXP)) {
-        const channelPostSizes = channelPostData.caption
-          .match(SIZE_REGEXP)
-          .map((size) => {
-            size = size.replace('#розмір_', '');
-            return ` ${size} `;
-          })
-          .join(' ');
-
-        sizes = channelPostSizes;
+        sizes = channelPostData.caption.match(SIZE_REGEXP).map((size) => {
+          size = size.replace('#розмір_', '');
+          size = size.replace('_', '.');
+        });
       }
 
       if (channelPostData.caption.match(BRAND_REGEXP)) {
@@ -284,17 +266,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .split(' ')
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
-
-        await upsertBrandToDatabase(brand);
       }
-
-      isInStock =
-        channelPostData.caption.includes('#в_наявності') ||
-        !channelPostData.caption.includes('ПРОДАНО');
-
-      isNew =
-        channelPostData.caption.includes('#нове') ||
-        channelPostData.caption.includes('Нова');
 
       if (channelPostData.date) {
         createdAtDate = moment
@@ -319,67 +291,17 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       messageId = channelPostData.message_id;
     }
 
-    const isPostInDatabase = await supabase
-      .from(TABLES.postsTable)
-      .select('messages-ids')
-      .eq('media-group-id', mediaGroupId);
-
-    if (isPostInDatabase.data.length <= 0) {
-      const emptyPostMessagesIds = await supabase
-        .from(TABLES.postsTable)
-        .insert({
-          'media-group-id': mediaGroupId,
-          'messages-ids': messageId,
-        });
-
-      if (channelPostData.caption) {
-        await updatePostDataToDatabase(
-          mediaGroupId,
-          postCaption,
-          createdAtDate,
-          editAtDate,
-          isNew,
-          isInStock,
-          brand,
-          sizes,
-          itemType,
-        );
-      }
-    } else {
-      const existingPostMessageIds = await supabase
-        .from(TABLES.postsTable)
-        .update({
-          'messages-ids': [
-            isPostInDatabase.data[0]['messages-ids'].split(' '),
-            messageId,
-          ].join(','),
-        })
-        .eq('media-group-id', mediaGroupId);
-
-      if (channelPostData.caption) {
-        await updatePostDataToDatabase(
-          mediaGroupId,
-          postCaption,
-          createdAtDate,
-          editAtDate,
-          isNew,
-          isInStock,
-          brand,
-          sizes,
-          itemType,
-        );
-      }
-    }
-
-    if (channelPostData.photo) {
-      mediaType = 'photo';
-      await uploadPhotoToStorage(ctx, channelPostData.message_id);
-    } else if (channelPostData.video) {
-      mediaType = 'video';
-      await uploadVideoToStorage(ctx, channelPostData.message_id);
-    }
-
-    upsertMediaToDatabase(channelPostData.message_id, mediaGroupId, mediaType);
+    upsertMessage(
+      mediaGroupId,
+      messageId,
+      isInStock,
+      itemType,
+      isNew,
+      sizes,
+      brand,
+      createdAtDate,
+      editAtDate,
+    );
   });
 
   //////////////////////////////////////////////////////////////////////////////////////
@@ -387,17 +309,15 @@ const supabase = createClient(supabaseUrl, supabaseKey);
   bot.on('edited_channel_post:media', async (ctx) => {
     const editedChannelPostData = ctx.update.edited_channel_post;
 
-    let messageId;
-    let mediaGroupId;
-    let editAtDate;
-    let mediaType;
-    let postCaption;
-    let isNew;
-    let isInStock;
-    let brand = '';
+    let mediaGroupId = null;
+    let messageId = null;
+    let isInStock = null;
+    let itemType = null;
+    let isNew = null;
     let sizes = [];
-    let itemType;
-    let createdAtDate;
+    let brand = null;
+    let createdAtDate = null;
+    let editAtDate = null;
 
     if (editedChannelPostData.message_id) {
       messageId = editedChannelPostData.message_id;
@@ -408,7 +328,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
     }
 
     if (editedChannelPostData.caption) {
-      postCaption = editedChannelPostData.caption;
+      isInStock = editedChannelPostData.caption.includes('#в_наявності');
+
+      isNew =
+        editedChannelPostData.caption.includes('#нове') ||
+        editedChannelPostData.caption.includes('Нова');
 
       if (editedChannelPostData.caption.includes('#взуття')) {
         itemType = ITEMS_TYPES.shoes;
@@ -417,14 +341,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
       } else itemType = ITEMS_TYPES.clothes;
 
       if (editedChannelPostData.caption.match(SIZE_REGEXP)) {
-        const channelPostSizes = editedChannelPostData.caption
-          .match(SIZE_REGEXP)
-          .map((size) => {
-            size = size.replace('#розмір_', '');
-            return ` ${size} `;
-          })
-          .join(',');
-        sizes = channelPostSizes;
+        sizes = editedChannelPostData.caption.match(SIZE_REGEXP).map((size) => {
+          size = size.replace('#розмір_', '');
+          size = size.replace('_', '.');
+        });
+        return sizes;
       }
 
       if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
@@ -436,12 +357,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
       }
-
-      isInStock = editedChannelPostData.caption.includes('#в_наявності');
-
-      isNew =
-        editedChannelPostData.caption.includes('#нове') ||
-        editedChannelPostData.caption.includes('Нова');
 
       if (editedChannelPostData.date) {
         createdAtDate = moment
@@ -456,47 +371,18 @@ const supabase = createClient(supabaseUrl, supabaseKey);
           .utc()
           .format('YYYY-MM-DD HH:mm:ssZ');
       }
-
-      await updatePostDataToDatabase(
-        mediaGroupId,
-        postCaption,
-        createdAtDate,
-        editAtDate,
-        isNew,
-        isInStock,
-        brand,
-        sizes,
-        itemType,
-      );
     }
-
-    let currentMessagesIds = await supabase
-      .from('Post-messages-media')
-      .select('media-type, id')
-      .eq('media-group-id', mediaGroupId);
-
-    if (!isInStock) {
-      currentMessagesIds = currentMessagesIds.data.map((id) => {
-        return (id =
-          id['media-type'] === 'photo' ? `${id.id}.jpg` : `${id.id}.mp4`);
-      });
-
-      const deleteMediaFromStorage = await supabase.storage
-        .from(TABLES.mediaStorage)
-        .remove(currentMessagesIds);
-    } else {
-      currentMessagesIds = currentMessagesIds.data.forEach(async (id) => {
-        if (editedChannelPostData.photo) {
-          mediaType = 'photo';
-          await uploadPhotoToStorage(ctx, id.id);
-        } else if (editedChannelPostData.video) {
-          mediaType = 'video';
-          await uploadVideoToStorage(ctx, id.id);
-        }
-      });
-    }
-
-    await upsertMediaToDatabase(messageId, mediaGroupId, mediaType);
+    upsertMessage(
+      mediaGroupId,
+      messageId,
+      isInStock,
+      itemType,
+      isNew,
+      sizes,
+      brand,
+      createdAtDate,
+      editAtDate,
+    );
   });
 
   bot.start();

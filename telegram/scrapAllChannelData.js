@@ -52,7 +52,6 @@ const sleep = (ms) => {
 
   const scrapAllChannelPosts = async () => {
     const ALL_DATA = [];
-    const postsDataFiltered = [];
 
     for (i = 100; i > 0; i--) {
       let limit = 3000;
@@ -66,7 +65,7 @@ const sleep = (ms) => {
           filter: new Api.InputMessagesFilterPhotoVideo(),
         });
       } else {
-        let offsetId = +ALL_DATA[ALL_DATA.length - 1].id;
+        let offsetId = +ALL_DATA[ALL_DATA.length - 1]['message-id'];
         console.log(offsetId);
         channelMessages = await clientMan.getMessages(channelId, {
           offsetId: offsetId,
@@ -85,14 +84,13 @@ const sleep = (ms) => {
       channelMessages.forEach(async (message) => {
         let mediaGroupId = null;
         let messageId = null;
-        let postMessage = null;
         let isInStock = null;
         let isNew = null;
         let createdAtDate = null;
         let editAtDate = null;
         let brand = null;
         let itemType = null;
-        let sizes = null;
+        let sizes = [];
 
         if (message.id) {
           messageId = message.id;
@@ -102,15 +100,7 @@ const sleep = (ms) => {
           mediaGroupId = message.groupedId.toString();
         }
 
-        if (message.media.photo) {
-          mediaType = 'photo';
-        } else if (message.media.document) {
-          mediaType = 'video';
-        }
-
         if (message.message) {
-          postMessage = message.message;
-
           if (message.message.includes('#взуття')) {
             itemType = 'взуття';
           } else if (message.message.includes('#аксесуари')) {
@@ -118,13 +108,10 @@ const sleep = (ms) => {
           } else itemType = 'одяг';
 
           if (message.message.match(SIZE_REGEXP)) {
-            const channelPostSizes = message.message
-              .match(SIZE_REGEXP)
-              .map((size) => {
-                return (size = size.replace('#розмір_', ''));
-              });
-
-            sizes = channelPostSizes;
+            sizes = message.message.match(SIZE_REGEXP).map((size) => {
+              size = size.replace('#розмір_', '').replace('_', '.');
+              return size;
+            });
           }
 
           if (message.message.match(BRAND_REGEXP)) {
@@ -142,8 +129,6 @@ const sleep = (ms) => {
           isNew =
             message.message.includes('#нове') ||
             message.message.includes('Нова');
-
-          postMessage = postMessage.replace(/\n/g, '@');
         }
 
         if (message.date) {
@@ -161,40 +146,26 @@ const sleep = (ms) => {
         }
 
         ALL_DATA.push({
-          id: messageId,
-          mediaGroupId: mediaGroupId,
-          postCaption: postMessage,
-          isNew: isNew,
-          isInStock: isInStock,
-          brand: brand,
-          size: sizes,
-          itemType: itemType,
-          createdAtDate: createdAtDate,
-          editedAtDate: editAtDate,
+          'message-id': messageId,
+          'media-group-id': mediaGroupId,
+          'is-in-stock': isInStock,
+          'item-type': itemType,
+          'is-new': isNew,
+          'brand': brand,
+          'sizes': sizes,
+          'created-at-date': createdAtDate,
+          'editer-at-date': editAtDate,
         });
       });
 
       await sleep(5000);
     }
 
-    ALL_DATA.forEach((message) => {
-      if (message.isInStock) {
-        postsDataFiltered.push({
-          'media-group-id': message.mediaGroupId,
-          'messages-ids': ALL_DATA.filter(
-            (data) => data.mediaGroupId === message.mediaGroupId,
-          ).map((data) => data.id),
-          'is-new': message.isNew,
-          'brand': message.brand,
-          'sizes': message.size,
-          'type': message.itemType,
-          'created-at-date': message.createdAtDate,
-          'edited-at-date': message.editAtDate,
-        });
-      }
-    });
+    const ALL_CHANNEL_MESSAGES = ALL_DATA.sort(
+      (a, b) => b['message-id'] - a['message-id'],
+    );
 
-    saveDataToFile(postsDataFiltered, 'posts/posts.json');
+    saveDataToFile(ALL_CHANNEL_MESSAGES, 'messages/messages.json');
   };
 
   await scrapAllChannelPosts();
