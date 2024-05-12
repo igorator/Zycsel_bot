@@ -2,12 +2,6 @@ const BUTTONS_ICONS = {
   brandsIcon: '\u200C',
 };
 
-const TABLES = {
-  postsTable: 'Channel-posts',
-  messagesIdsTable: 'Post-messages-media',
-  mediaStorage: 'channel-messages-media',
-};
-
 //screens
 
 const SCREENS = {
@@ -78,13 +72,15 @@ const SIZE_REGEXP =
 
 const BRAND_REGEXP = /#бренд_\w+/;
 
+const BRANDS_EVENT_REGEXP = new RegExp(`[\\p{${BUTTONS_ICONS.brandsIcon}}]`);
+
 module.exports = {
   BUTTONS_ICONS,
-  TABLES,
   SCREENS,
   ITEMS_TYPES,
   CLOTHING_SIZES,
   SHOES_SIZES,
   SIZE_REGEXP,
   BRAND_REGEXP,
+  BRANDS_EVENT_REGEXP,
 };

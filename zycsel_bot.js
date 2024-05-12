@@ -1,10 +1,10 @@
 require('dotenv').config();
 const moment = require('moment');
-
 const { getAllChannelPosts } = require('./database/getAllChannelPosts');
 const { renderChannelPosts } = require('./render/renderChannelPosts');
 const { upsertMessage } = require('./database/upsertMessage');
-
+const { autoRetry } = require('@grammyjs/auto-retry');
+const { limit } = require('@grammyjs/ratelimiter');
 const { Bot, GrammyError, HttpError, session } = require('grammy');
 const { SCREEN_FACTORY } = require('./render/renderControls');
 const {
@@ -14,6 +14,7 @@ const {
   SHOES_SIZES,
   SIZE_REGEXP,
   BRAND_REGEXP,
+  BRANDS_EVENT_REGEXP,
   BUTTONS_ICONS,
 } = require('./components/constants');
 
@@ -45,6 +46,8 @@ const {
   }
 
   bot.use(session({ initial }));
+  bot.api.config.use(autoRetry());
+  bot.use(limit());
 
   await bot.api.setMyCommands([
     { command: 'start', description: 'Розпочати пошук' },
@@ -82,6 +85,7 @@ const {
 
   bot.hears('Аксесуари', async (ctx) => {
     ctx.session.type = ITEMS_TYPES.accessories;
+    ctx.session.size = null;
     ctx.session.screen = SCREENS.qualitySelection;
     const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
     renderControls(ctx);
@@ -185,9 +189,7 @@ const {
     }
   });
 
-  const brandsRegExp = new RegExp(`[\\p{${BUTTONS_ICONS.brandsIcon}}]`);
-
-  bot.hears(brandsRegExp, async (ctx) => {
+  bot.hears(BRANDS_EVENT_REGEXP, async (ctx) => {
     ctx.session.brand = ctx.match.input.replace(BUTTONS_ICONS.brandsIcon, '');
     ctx.session.screen = SCREENS.itemsSearchSelection;
     const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
@@ -254,7 +256,7 @@ const {
       if (channelPostData.caption.match(SIZE_REGEXP)) {
         sizes = channelPostData.caption.match(SIZE_REGEXP).map((size) => {
           size = size.replace('#розмір_', '');
-          size = size.replace('_', '.');
+          return (size = size.replace('_', '.'));
         });
       }
 
@@ -291,7 +293,7 @@ const {
       messageId = channelPostData.message_id;
     }
 
-    upsertMessage(
+    await upsertMessage(
       mediaGroupId,
       messageId,
       isInStock,
@@ -343,9 +345,8 @@ const {
       if (editedChannelPostData.caption.match(SIZE_REGEXP)) {
         sizes = editedChannelPostData.caption.match(SIZE_REGEXP).map((size) => {
           size = size.replace('#розмір_', '');
-          size = size.replace('_', '.');
+          return (size = size.replace('_', '.'));
         });
-        return sizes;
       }
 
       if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
@@ -372,7 +373,7 @@ const {
           .format('YYYY-MM-DD HH:mm:ssZ');
       }
     }
-    upsertMessage(
+    await upsertMessage(
       mediaGroupId,
       messageId,
       isInStock,

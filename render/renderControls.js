@@ -1,5 +1,4 @@
 const {
-  TABLES,
   SCREENS,
   ITEMS_TYPES,
   CLOTHING_SIZES,
@@ -13,7 +12,6 @@ const {
   brandKeyboard,
   itemsSearchKeyboard,
 } = require('../components/keyboards');
-const { getAllChannelPosts } = require('../database/getAllChannelPosts');
 const { getChannelPostsBrands } = require('../database/getChannelPostsBrands');
 const { getChannelPostsSizes } = require('../database/getChannelPostsSizes');
 
@@ -50,7 +48,7 @@ const renderSizeControls = async (ctx) => {
 
     sizeButtons = CLOTHING_SIZES.filter((label) => sizeButtons.includes(label));
   } else if (ctx.session.type === ITEMS_TYPES.shoes) {
-    sizeButtons = await getChannelPostsSizes(true, true, ctx.session.type);
+    sizeButtons = await getChannelPostsSizes(ctx.session.type, true);
 
     sizeButtons = SHOES_SIZES.filter((label) => sizeButtons.includes(label));
   }
@@ -75,8 +73,6 @@ const renderBrandControls = async (ctx) => {
       ctx.session.isNew,
       null,
     );
-
-    console.log(brandButtons);
   } else if (ctx.session.type === ITEMS_TYPES.clothes) {
     brandButtons = await getChannelPostsBrands(
       ctx.session.type,
@@ -86,7 +82,7 @@ const renderBrandControls = async (ctx) => {
   } else if (ctx.session.type === ITEMS_TYPES.shoes) {
     brandButtons = await getChannelPostsBrands(
       ctx.session.type,
-      null,
+      true,
       ctx.session.size,
     );
   }
