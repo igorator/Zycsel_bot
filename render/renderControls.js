@@ -17,7 +17,7 @@ const { getChannelPostsBrands } = require('../database/getChannelPostsBrands');
 const { getChannelPostsSizes } = require('../database/getChannelPostsSizes');
 
 const renderTypeControls = async (ctx) => {
-  const msgReply = 'Оберіть тип речей';
+  const msgReply = 'Оберіть тип речей:';
 
   await ctx.reply(msgReply, {
     reply_markup: typeKeyboard,
@@ -30,7 +30,7 @@ const renderQualityControls = async (ctx) => {
   const msgReply =
     ctx.match === 'Назад'
       ? 'Оберіть стан речей'
-      : `Ви обрали ${ctx.match}. Оберіть стан речей.`;
+      : `Ви обрали ${ctx.match}. Оберіть стан речей:`;
 
   await ctx.reply(msgReply, {
     reply_markup: qualityKeyboard,
@@ -54,10 +54,11 @@ const renderSizeControls = async (ctx) => {
     sizeButtons = SHOES_SIZES.filter((label) => sizeButtons.includes(label));
   }
 
+  console.log(sizeButtons);
   const msgReply =
     ctx.match === 'Назад'
       ? 'Оберіть розмір речей'
-      : `Ви обрали ${ctx.match}. Оберіть розмір речей.`;
+      : `Ви обрали ${ctx.match}. Оберіть розмір речей:`;
 
   await ctx.reply(msgReply, {
     reply_markup: sizesKeyboard(sizeButtons),
@@ -92,7 +93,7 @@ const renderBrandControls = async (ctx) => {
     (brand) => `${BUTTONS_ICONS.brandsIcon}${brand}`,
   );
 
-  const msgReply = `Вы обрали ${ctx.match}. Оберіть бренд`;
+  const msgReply = `Вы обрали ${ctx.match}. Оберіть бренд:`;
   await ctx.reply(msgReply, {
     reply_markup: brandKeyboard(brandButtons),
   });
@@ -101,7 +102,7 @@ const renderBrandControls = async (ctx) => {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 const renderItemsSearchControls = async (ctx) => {
-  const msgReply = 'Оберіть дію';
+  const msgReply = 'Оберіть дію:';
 
   await ctx.reply(msgReply, {
     reply_markup: itemsSearchKeyboard,

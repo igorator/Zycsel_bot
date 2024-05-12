@@ -2,7 +2,7 @@ require('dotenv').config();
 const moment = require('moment');
 const { getAllChannelPosts } = require('./database/getAllChannelPosts');
 const { renderChannelPosts } = require('./render/renderChannelPosts');
-const { upsertMessage } = require('./database/upsertMessage');
+const { upsertMessage, upsertPost } = require('./database/upsertData');
 const { autoRetry } = require('@grammyjs/auto-retry');
 const { limit } = require('@grammyjs/ratelimiter');
 const { apiThrottler } = require('@grammyjs/transformer-throttler');
@@ -255,24 +255,28 @@ bot.hears('Знайти інші речі', async (ctx) => {
 bot.on('channel_post:media', async (ctx) => {
   const channelPostData = ctx.update.channel_post;
 
-  let mediaGroupId = null;
   let messageId = null;
-  let isInStock = null;
-  let itemType = null;
-  let isNew = null;
-  let sizes = [];
-  let brand = null;
-  let createdAtDate = null;
-  let editAtDate = null;
+  let mediaGroupId = null;
+  let postCaption;
+
+  if (channelPostData.media_group_id) {
+    mediaGroupId = channelPostData.media_group_id;
+  }
+
+  if (channelPostData.message_id) {
+    messageId = channelPostData.message_id;
+  }
 
   if (channelPostData.caption) {
-    isInStock =
-      channelPostData.caption.includes('#в_наявності') ||
-      !channelPostData.caption.includes('ПРОДАНО');
+    let isNew = null;
+    let isInStock = null;
+    let createdAtDate = null;
+    let editedAtDate = null;
+    let brand = null;
+    let itemType = null;
+    let sizes = [];
 
-    isNew =
-      channelPostData.caption.includes('#нове') ||
-      channelPostData.caption.includes('Нова');
+    postCaption = channelPostData.caption;
 
     if (channelPostData.caption.includes('#взуття')) {
       itemType = ITEMS_TYPES.shoes;
@@ -281,10 +285,15 @@ bot.on('channel_post:media', async (ctx) => {
     } else itemType = ITEMS_TYPES.clothes;
 
     if (channelPostData.caption.match(SIZE_REGEXP)) {
-      sizes = channelPostData.caption.match(SIZE_REGEXP).map((size) => {
-        size = size.replace('#розмір_', '');
-        return (size = size.replace('_', '.'));
-      });
+      const channelPostSizes = channelPostData.caption
+        .match(SIZE_REGEXP)
+        .map((size) => {
+          size = size.replace('#розмір_', '');
+          return ` ${size} `;
+        })
+        .join(' ');
+
+      sizes = channelPostSizes;
     }
 
     if (channelPostData.caption.match(BRAND_REGEXP)) {
@@ -295,7 +304,17 @@ bot.on('channel_post:media', async (ctx) => {
         .split(' ')
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
+
+      await upsertBrandToDatabase(brand);
     }
+
+    isInStock =
+      channelPostData.caption.includes('#в_наявності') ||
+      !channelPostData.caption.includes('ПРОДАНО');
+
+    isNew =
+      channelPostData.caption.includes('#нове') ||
+      channelPostData.caption.includes('Нова');
 
     if (channelPostData.date) {
       createdAtDate = moment
@@ -304,33 +323,19 @@ bot.on('channel_post:media', async (ctx) => {
         .format('YYYY-MM-DD HH:mm:ssZ');
     }
 
-    if (channelPostData.edit_date) {
-      editAtDate = moment
-        .unix(channelPostData.edit_date)
-        .utc()
-        .format('YYYY-MM-DD HH:mm:ssZ');
-    }
+    await upsertPost(
+      mediaGroupId,
+      isInStock,
+      itemType,
+      isNew,
+      sizes,
+      brand,
+      createdAtDate,
+      editedAtDate,
+    );
   }
 
-  if (channelPostData.media_group_id) {
-    mediaGroupId = channelPostData.media_group_id;
-  }
-
-  if (channelPostData.message_id) {
-    messageId = channelPostData.message_id;
-  }
-
-  await upsertMessage(
-    mediaGroupId,
-    messageId,
-    isInStock,
-    itemType,
-    isNew,
-    sizes,
-    brand,
-    createdAtDate,
-    editAtDate,
-  );
+  await upsertMessage(mediaGroupId, messageId);
 });
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -338,15 +343,9 @@ bot.on('channel_post:media', async (ctx) => {
 bot.on('edited_channel_post:media', async (ctx) => {
   const editedChannelPostData = ctx.update.edited_channel_post;
 
-  let mediaGroupId = null;
-  let messageId = null;
-  let isInStock = null;
-  let itemType = null;
-  let isNew = null;
-  let sizes = [];
-  let brand = null;
-  let createdAtDate = null;
-  let editAtDate = null;
+  let messageId;
+  let mediaGroupId;
+  let postCaption;
 
   if (editedChannelPostData.message_id) {
     messageId = editedChannelPostData.message_id;
@@ -357,11 +356,15 @@ bot.on('edited_channel_post:media', async (ctx) => {
   }
 
   if (editedChannelPostData.caption) {
-    isInStock = editedChannelPostData.caption.includes('#в_наявності');
+    let isNew;
+    let isInStock;
+    let brand = '';
+    let sizes = [];
+    let createdAtDate;
+    let editAtDate;
+    let itemType;
 
-    isNew =
-      editedChannelPostData.caption.includes('#нове') ||
-      editedChannelPostData.caption.includes('Нова');
+    postCaption = editedChannelPostData.caption;
 
     if (editedChannelPostData.caption.includes('#взуття')) {
       itemType = ITEMS_TYPES.shoes;
@@ -370,21 +373,32 @@ bot.on('edited_channel_post:media', async (ctx) => {
     } else itemType = ITEMS_TYPES.clothes;
 
     if (editedChannelPostData.caption.match(SIZE_REGEXP)) {
-      sizes = editedChannelPostData.caption.match(SIZE_REGEXP).map((size) => {
-        size = size.replace('#розмір_', '');
-        return (size = size.replace('_', '.'));
-      });
+      const channelPostSizes = editedChannelPostData.caption
+        .match(SIZE_REGEXP)
+        .map((size) => {
+          size = size.replace('#розмір_', '');
+          return ` ${size} `;
+        })
+        .join(',');
+      sizes = channelPostSizes;
     }
 
     if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
       brand = editedChannelPostData.caption
         .match(BRAND_REGEXP)[0]
         .replace('#бренд_', '')
+        .replace('_', '.')
         .replace(/_/g, ' ')
         .split(' ')
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
     }
+
+    isInStock = editedChannelPostData.caption.includes('#в_наявності');
+
+    isNew =
+      editedChannelPostData.caption.includes('#нове') ||
+      editedChannelPostData.caption.includes('Нова');
 
     if (editedChannelPostData.date) {
       createdAtDate = moment
@@ -399,18 +413,20 @@ bot.on('edited_channel_post:media', async (ctx) => {
         .utc()
         .format('YYYY-MM-DD HH:mm:ssZ');
     }
+
+    await upsertPost(
+      mediaGroupId,
+      isInStock,
+      itemType,
+      isNew,
+      sizes,
+      brand,
+      createdAtDate,
+      editAtDate,
+    );
   }
-  await upsertMessage(
-    mediaGroupId,
-    messageId,
-    isInStock,
-    itemType,
-    isNew,
-    sizes,
-    brand,
-    createdAtDate,
-    editAtDate,
-  );
+
+  await upsertMessage(mediaGroupId, messageId);
 });
 
 const runner = run(bot);

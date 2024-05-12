@@ -1,19 +1,28 @@
-const fs = require('fs').promises;
+const { createClient } = require('@supabase/supabase-js');
+const { TABLES } = require('../components/constants');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const getChannelPostsBrands = async (itemType, isNew, size) => {
   try {
-    const data = await fs.readFile('./messages/messages.json');
-    const channelPostsMessages = JSON.parse(data);
+    let query = supabase
+      .from(TABLES.channelPosts)
+      .select('brand')
+      .eq('is-in-stock', true)
+      .eq('type', itemType)
+      .eq('is-new', isNew);
 
-    let filteredBrands = channelPostsMessages
-      .filter(
-        (message) =>
-          message['is-in-stock'] === true &&
-          (itemType === null || message['item-type'] === itemType) &&
-          (isNew === null || message['is-new'] === isNew) &&
-          (size === null || message['sizes'].includes(size)),
-      )
-      .flatMap((message) => message.brand);
+    if (size !== null) {
+      query = query.ilike('sizes', `% ${size} %`);
+    }
+
+    const { data } = await query;
+
+    console.log(data);
+
+    let filteredBrands = data.map((brand) => brand.brand);
 
     filteredBrands = Array.from(new Set(filteredBrands));
 

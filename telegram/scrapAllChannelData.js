@@ -1,5 +1,13 @@
 require('dotenv').config();
 
+let mkConfig, generateCsv, asString;
+import('export-to-csv').then(
+  ({ mkConfig: mkCfg, generateCsv: genCsv, asString: asStr }) => {
+    mkConfig = mkCfg;
+    generateCsv = genCsv;
+    asString = asStr;
+  },
+);
 const fs = require('fs');
 const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
@@ -28,20 +36,11 @@ const loginClient = async () => {
   });
 };
 
-const saveDataToFile = (data, filePath) => {
-  const jsonData = JSON.stringify(data, null, 2);
-  fs.writeFile(filePath, jsonData, (err) => {
-    if (err) {
-      console.error('Error writing JSON file:', err);
-    } else {
-      console.log('Data saved to', filePath);
-    }
-  });
-};
-
 const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
+
+module.exports = { sleep };
 
 (async () => {
   await clientMan.connect();
@@ -49,6 +48,26 @@ const sleep = (ms) => {
   if (!clientMan) {
     loginClient();
   }
+
+  const PostsCsvConfig = mkConfig({
+    filename: 'Posts',
+    useKeysAsHeaders: true,
+  });
+  const messagesIdsCsvConfig = mkConfig({
+    filename: 'MessagesIds',
+    useKeysAsHeaders: true,
+  });
+
+  const saveCsvFileToDisk = async (config, path, data) => {
+    const csv = generateCsv(config)(data);
+    const filename = `${config.filename}.csv`;
+    const csvBuffer = new Uint8Array(Buffer.from(asString(csv)));
+
+    fs.writeFile(`${path}/${filename}`, csvBuffer, (err) => {
+      if (err) throw err;
+      console.log('file saved: ', filename);
+    });
+  };
 
   const scrapAllChannelPosts = async () => {
     const ALL_DATA = [];
@@ -65,7 +84,7 @@ const sleep = (ms) => {
           filter: new Api.InputMessagesFilterPhotoVideo(),
         });
       } else {
-        let offsetId = +ALL_DATA[ALL_DATA.length - 1]['message-id'];
+        let offsetId = +ALL_DATA[ALL_DATA.length - 1].id;
         console.log(offsetId);
         channelMessages = await clientMan.getMessages(channelId, {
           offsetId: offsetId,
@@ -84,20 +103,26 @@ const sleep = (ms) => {
       channelMessages.forEach(async (message) => {
         let mediaGroupId = null;
         let messageId = null;
-        let isInStock = null;
         let isNew = null;
+        let isInStock = null;
         let createdAtDate = null;
         let editAtDate = null;
         let brand = null;
         let itemType = null;
-        let sizes = [];
+        let sizes = null;
 
         if (message.id) {
-          messageId = message.id;
+          messageId = message.id.toString();
         }
 
         if (message.groupedId) {
           mediaGroupId = message.groupedId.toString();
+        }
+
+        if (message.media.photo) {
+          mediaType = 'photo';
+        } else if (message.media.document) {
+          mediaType = 'video';
         }
 
         if (message.message) {
@@ -108,10 +133,15 @@ const sleep = (ms) => {
           } else itemType = 'одяг';
 
           if (message.message.match(SIZE_REGEXP)) {
-            sizes = message.message.match(SIZE_REGEXP).map((size) => {
-              size = size.replace('#розмір_', '').replace('_', '.');
-              return size;
-            });
+            const channelPostSizes = message.message
+              .match(SIZE_REGEXP)
+              .map((size) => {
+                size = size.replace('#розмір_', '').replace('_', '.');
+                return ` ${size} `;
+              })
+              .join(',');
+
+            sizes = channelPostSizes;
           }
 
           if (message.message.match(BRAND_REGEXP)) {
@@ -146,26 +176,52 @@ const sleep = (ms) => {
         }
 
         ALL_DATA.push({
-          'message-id': messageId,
-          'media-group-id': mediaGroupId,
-          'is-in-stock': isInStock,
-          'item-type': itemType,
-          'is-new': isNew,
-          'brand': brand,
-          'sizes': sizes,
-          'created-at-date': createdAtDate,
-          'editer-at-date': editAtDate,
+          mediaGroupId: mediaGroupId,
+          id: messageId,
+          isInStock: isInStock,
+          isNew: isNew,
+          brand: brand,
+          size: sizes,
+          itemType: itemType,
+          createdAtDate: createdAtDate,
+          editedAtDate: editAtDate,
         });
       });
 
       await sleep(5000);
     }
 
-    const ALL_CHANNEL_MESSAGES = ALL_DATA.sort(
-      (a, b) => b['message-id'] - a['message-id'],
-    );
+    const postsDataFiltered = [];
+    const messagesIdsDataFiltered = [];
 
-    saveDataToFile(ALL_CHANNEL_MESSAGES, 'messages/messages.json');
+    ALL_DATA.forEach((message) => {
+      // Фильтрация по медиа-идентификаторам
+      messagesIdsDataFiltered.push({
+        'message-id': message.id,
+        'media-group-id': message.mediaGroupId,
+      });
+
+      // Фильтрация данных только с товарами в наличии
+      if (message.isInStock) {
+        postsDataFiltered.push({
+          'media-group-id': message.mediaGroupId,
+          'is-in-stock': message.isInStock,
+          'is-new': message.isNew,
+          'brand': message.brand,
+          'sizes': message.size,
+          'type': message.itemType,
+          'created-at-date': message.createdAtDate,
+          'edited-at-date': message.editAtDate,
+        });
+      }
+    });
+
+    await saveCsvFileToDisk(
+      messagesIdsCsvConfig,
+      'export',
+      messagesIdsDataFiltered,
+    );
+    await saveCsvFileToDisk(PostsCsvConfig, 'export', postsDataFiltered);
   };
 
   await scrapAllChannelPosts();

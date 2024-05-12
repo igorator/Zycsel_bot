@@ -1,18 +1,22 @@
-const fs = require('fs').promises;
+const { TABLES } = require('../components/constants');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const getChannelPostsSizes = async (itemType, isNew) => {
   try {
-    const data = await fs.readFile('./messages/messages.json');
-    const channelPostsMessages = JSON.parse(data);
+    const channelPostsSizes = await supabase
+      .from(TABLES.channelPosts)
+      .select('sizes')
+      .eq('is-in-stock', true)
+      .eq('type', itemType)
+      .eq('is-new', isNew);
 
-    const filteredSizes = channelPostsMessages
-      .filter(
-        (message) =>
-          message['is-in-stock'] === true &&
-          (isNew === null || message['is-new'] === isNew) &&
-          (itemType === null || message['item-type'] === itemType),
-      )
-      .flatMap((message) => message.sizes);
+    const filteredSizes = channelPostsSizes.data.map((size) =>
+      size.sizes.trim().replace('_', '.'),
+    );
 
     return filteredSizes;
   } catch (error) {

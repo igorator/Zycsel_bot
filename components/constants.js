@@ -2,6 +2,11 @@ const BUTTONS_ICONS = {
   brandsIcon: '\u200C',
 };
 
+const TABLES = {
+  channelPosts: 'Channel-posts',
+  messagesIds: 'Messages-ids',
+};
+
 //screens
 
 const SCREENS = {
@@ -76,6 +81,7 @@ const BRAND_REGEXP = /#бренд_\w+/;
 const BRANDS_EVENT_REGEXP = new RegExp(`[\\p{${BUTTONS_ICONS.brandsIcon}}]`);
 
 module.exports = {
+  TABLES,
   BUTTONS_ICONS,
   SCREENS,
   ITEMS_TYPES,

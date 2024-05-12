@@ -6,11 +6,8 @@ const renderChannelPosts = async (ctx, channelPosts, postOffset) => {
   let postCounter = 0;
   console.log(channelPosts.length);
   for (let i = postOffset; i < channelPosts.length; i++) {
-    const post = channelPosts[i];
-
-    const messagesIds = post['messages-ids'].sort((a, b) => a - b);
+    const messagesIds = channelPosts[i];
     await ctx.api.forwardMessages(ctx.chat.id, CHANNEL_ID, messagesIds);
-
     postCounter++;
 
     if (postCounter % 10 === 0) {
@@ -27,5 +24,7 @@ const renderChannelPosts = async (ctx, channelPosts, postOffset) => {
     await renderControls(ctx);
   }
 };
+
+module.exports = { renderChannelPosts };
 
 module.exports = { renderChannelPosts };

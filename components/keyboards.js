@@ -56,7 +56,8 @@ const itemsSearchKeyboard = new Keyboard()
   .text('Завантажити ще')
   .row()
   .text('Знайти інші речі')
-  .row();
+  .row()
+  .oneTime();
 
 const searchRefreshKeyboard = new Keyboard().text('Знайти інші речі');
 

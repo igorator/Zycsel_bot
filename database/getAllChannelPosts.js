@@ -1,56 +1,46 @@
-const fs = require('fs').promises;
+const { createClient } = require('@supabase/supabase-js');
+const { TABLES } = require('../components/constants');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const getAllChannelPosts = async (itemType, isNew, size, brand) => {
-  try {
-    const data = await fs.readFile('./messages/messages.json');
-    const channelPostsMessages = JSON.parse(data);
+  const filteredMessagesIds = [];
 
-    const posts = [];
-    for (const message of channelPostsMessages) {
-      const mediaGroupId = message['media-group-id'];
-      let post = posts.find((p) => p['media-group-id'] === mediaGroupId);
-      if (!post) {
-        post = {
-          'media-group-id': mediaGroupId,
-          'messages-ids': [],
-        };
-        posts.push(post);
-      }
-      post['messages-ids'].push(message['message-id']);
-      if (message['is-in-stock'] !== null) {
-        post['is-in-stock'] = message['is-in-stock'];
-      }
-      if (message['item-type'] !== null) {
-        post['item-type'] = message['item-type'];
-      }
-      if (message['is-new'] !== null) {
-        post['is-new'] = message['is-new'];
-      }
-      if (message['brand'] !== null) {
-        post['brand'] = message['brand'];
-      }
-      if (message['sizes'].length > 0) {
-        post['sizes'] = message['sizes'];
-      }
-      if (message['created-at-date'] !== null) {
-        post['created-at-date'] = message['created-at-date'];
-      }
-      if (message['edited-at-date'] !== null) {
-        post['edited-at-date'] = message['edited-at-date'];
-      }
+  try {
+    let query = supabase
+      .from(TABLES.channelPosts)
+      .select('media-group-id')
+      .eq('is-in-stock', true)
+      .eq('type', itemType)
+      .eq('is-new', isNew)
+      .order('created-at-date', { ascending: true });
+
+    if (brand !== null) {
+      query = query.eq('brand', brand);
     }
 
-    const filteredChannelPosts = posts.filter((post) => {
-      return (
-        post['is-in-stock'] === true &&
-        (itemType === null || post['item-type'] === itemType) &&
-        (isNew === null || post['is-new'] === isNew) &&
-        (size === null || post['sizes'].includes(size)) &&
-        (brand === null || post['brand'] === brand)
-      );
-    });
+    if (size !== null) {
+      query = query.ilike('sizes', `% ${size} %`);
+    }
 
-    return filteredChannelPosts;
+    const { data } = await query;
+
+    for (const mediaGroupId of data) {
+      let messagesIds = await supabase
+        .from(TABLES.messagesIds)
+        .select('message-id')
+        .eq('media-group-id', mediaGroupId['media-group-id']);
+
+      messagesIds = messagesIds.data
+        .map((messageId) => messageId['message-id'])
+        .sort((a, b) => a - b);
+
+      filteredMessagesIds.push(messagesIds);
+    }
+
+    return filteredMessagesIds;
   } catch (error) {
     console.error('Error reading file:', error);
     return [];
