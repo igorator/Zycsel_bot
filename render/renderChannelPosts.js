@@ -1,35 +1,31 @@
-CHANNEL_ID = process.env.CHANNEL_ID;
+const CHANNEL_ID = process.env.CHANNEL_ID;
+const { SCREEN_FACTORY } = require('../render/renderControls');
+const { SCREENS } = require('../components/constants');
 
-const renderChannelPosts = async (ctx, channelPosts) => {
-  let postsToRender = [];
-  let currentChunk = [];
-  let currentChunkSize = 0;
+const renderChannelPosts = async (ctx, channelPosts, postOffset) => {
+  let postCounter = 0;
+  console.log(channelPosts.length);
+  for (let i = postOffset; i < channelPosts.length; i++) {
+    const post = channelPosts[i];
 
-  for (const post of channelPosts) {
-    const messagesIds = post['messages-ids'];
+    const messagesIds = post['messages-ids'].sort((a, b) => a - b);
+    await ctx.api.forwardMessages(ctx.chat.id, CHANNEL_ID, messagesIds);
 
-    if (currentChunkSize + messagesIds.length > 7) {
-      postsToRender.push(currentChunk);
-      currentChunk = [];
-      currentChunkSize = 0;
+    postCounter++;
+
+    if (postCounter % 10 === 0) {
+      await ctx.reply(`Виведено ${i + 1} речей з ${channelPosts.length}`);
+
+      const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
+      await renderControls(ctx);
+      break;
     }
-
-    currentChunk.push(...messagesIds);
-    currentChunkSize += messagesIds.length;
   }
 
-  if (currentChunk.length > 0) {
-    postsToRender.push(currentChunk);
-  }
-
-  try {
-    for (let chunk of postsToRender) {
-      chunk = chunk.sort((a, b) => a - b);
-      await ctx.api.forwardMessages(ctx.chat.id, CHANNEL_ID, chunk);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  } finally {
-    ctx.reply('Наразі це всі речі за вашим запитом');
+  if (postOffset + postCounter >= channelPosts.length) {
+    const renderControls = SCREEN_FACTORY[SCREENS.searchRefreshSelection];
+    await renderControls(ctx);
   }
 };
+
 module.exports = { renderChannelPosts };

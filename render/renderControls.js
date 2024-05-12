@@ -11,6 +11,7 @@ const {
   sizesKeyboard,
   brandKeyboard,
   itemsSearchKeyboard,
+  searchRefreshKeyboard,
 } = require('../components/keyboards');
 const { getChannelPostsBrands } = require('../database/getChannelPostsBrands');
 const { getChannelPostsSizes } = require('../database/getChannelPostsSizes');
@@ -100,10 +101,7 @@ const renderBrandControls = async (ctx) => {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 const renderItemsSearchControls = async (ctx) => {
-  const msgReply =
-    ctx.match === 'Всі бренди'
-      ? 'Ви обрали всі бренди'
-      : `Ви обрали бренд ${ctx.match.input}`;
+  const msgReply = 'Оберіть дію';
 
   await ctx.reply(msgReply, {
     reply_markup: itemsSearchKeyboard,
@@ -112,12 +110,19 @@ const renderItemsSearchControls = async (ctx) => {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+const renderSearchRefreshControls = async (ctx) => {
+  await ctx.reply('Наразі це всі речі за вашим запитом', {
+    reply_markup: searchRefreshKeyboard,
+  });
+};
+
 const SCREEN_FACTORY = {
   [SCREENS.typeSelection]: renderTypeControls,
   [SCREENS.qualitySelection]: renderQualityControls,
   [SCREENS.sizeSelection]: renderSizeControls,
   [SCREENS.brandSelection]: renderBrandControls,
   [SCREENS.itemsSearchSelection]: renderItemsSearchControls,
+  [SCREENS.searchRefreshSelection]: renderSearchRefreshControls,
 };
 
 module.exports = { SCREEN_FACTORY };

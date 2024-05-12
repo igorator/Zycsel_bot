@@ -10,6 +10,7 @@ const SCREENS = {
   sizeSelection: 'sizeSelection',
   brandSelection: 'brandSelection',
   itemsSearchSelection: 'itemsSearchSelection',
+  searchRefreshSelection: 'searchRefreshSelection',
 };
 
 //items types
