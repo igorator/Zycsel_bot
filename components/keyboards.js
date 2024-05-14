@@ -46,12 +46,20 @@ const brandKeyboard = (brands) => {
 
   const brandsKeyboard = Keyboard.from(brandButtons)
     .resized()
-    .placeholder('Оберіть бренд');
+    .placeholder('Оберіть бренд')
+    .oneTime();
 
   return brandsKeyboard;
 };
 
-const itemsSearchKeyboard = new Keyboard().text('Знайти інші речі').row();
+const itemsSearchKeyboard = new Keyboard()
+  .text('Завантажити ще')
+  .row()
+  .text('Знайти інші речі')
+  .row()
+  .oneTime();
+
+const searchRefreshKeyboard = new Keyboard().text('Знайти інші речі');
 
 module.exports = {
   qualityKeyboard,
@@ -59,4 +67,5 @@ module.exports = {
   sizesKeyboard,
   brandKeyboard,
   itemsSearchKeyboard,
+  searchRefreshKeyboard,
 };

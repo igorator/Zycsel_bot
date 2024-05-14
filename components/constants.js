@@ -3,9 +3,8 @@ const BUTTONS_ICONS = {
 };
 
 const TABLES = {
-  postsTable: 'Channel-posts',
-  messagesIdsTable: 'Post-messages-media',
-  mediaStorage: 'channel-messages-media',
+  channelPosts: 'Channel-posts',
+  messagesIds: 'Messages-ids',
 };
 
 //screens
@@ -16,6 +15,7 @@ const SCREENS = {
   sizeSelection: 'sizeSelection',
   brandSelection: 'brandSelection',
   itemsSearchSelection: 'itemsSearchSelection',
+  searchRefreshSelection: 'searchRefreshSelection',
 };
 
 //items types
@@ -40,20 +40,34 @@ const CLOTHING_SIZES = [
   'Жіноче',
 ];
 const SHOES_SIZES = [
+  '34',
+  '34.5',
+  '35',
+  '35.5',
+  '36',
+  '36.5',
+  '36',
+  '36.5',
+  '37',
+  '37.5',
+  '38',
+  '38.5',
+  '39',
+  '39.5',
   '40',
-  '40_5',
+  '40.5',
   '41',
-  '41_5',
+  '41.5',
   '42',
-  '42_5',
+  '42.5',
   '43',
-  '43_5',
+  '43.5',
   '44',
-  '44_5',
+  '44.5',
   '45',
-  '45_5',
+  '45.5',
   '46',
-  '46_5',
+  '46.5',
   '47',
 ];
 
@@ -64,13 +78,16 @@ const SIZE_REGEXP =
 
 const BRAND_REGEXP = /#бренд_\w+/;
 
+const BRANDS_EVENT_REGEXP = new RegExp(`[\\p{${BUTTONS_ICONS.brandsIcon}}]`);
+
 module.exports = {
-  BUTTONS_ICONS,
   TABLES,
+  BUTTONS_ICONS,
   SCREENS,
   ITEMS_TYPES,
   CLOTHING_SIZES,
   SHOES_SIZES,
   SIZE_REGEXP,
   BRAND_REGEXP,
+  BRANDS_EVENT_REGEXP,
 };

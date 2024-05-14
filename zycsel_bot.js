@@ -1,14 +1,16 @@
 require('dotenv').config();
-const { getChannelPosts } = require('./database/getChannelPosts');
-const { renderChannelPosts } = require('./render/renderChannelPosts');
-const {
-  updatePostDataToDatabase,
-  upsertMediaToDatabase,
-} = require('./database/postToDatabase');
 const moment = require('moment');
+const { getAllChannelPostsIds } = require('./database/getAllChannelPosts');
+const {
+  forwardChannelPostsByIds,
+} = require('./render/forwardChannelPostsByIds');
+const { upsertMessage, upsertPost } = require('./database/upsertData');
+const { autoRetry } = require('@grammyjs/auto-retry');
+const { limit } = require('@grammyjs/ratelimiter');
+const { apiThrottler } = require('@grammyjs/transformer-throttler');
+const { run, sequentialize } = require('@grammyjs/runner');
 const { Bot, GrammyError, HttpError, session } = require('grammy');
-const { createClient } = require('@supabase/supabase-js');
-
+const { SCREEN_FACTORY } = require('./render/renderControls');
 const {
   SCREENS,
   ITEMS_TYPES,
@@ -16,487 +18,431 @@ const {
   SHOES_SIZES,
   SIZE_REGEXP,
   BRAND_REGEXP,
-  TABLES,
+  BRANDS_EVENT_REGEXP,
   BUTTONS_ICONS,
 } = require('./components/constants');
-const { SCREEN_FACTORY } = require('./render/renderControls');
-const { hydrateFiles } = require('@grammyjs/files');
-const {
-  sendFileToStorage,
-  uploadPhotoToStorage,
-  uploadVideoToStorage,
-} = require('./database/sendFileToStorage');
-const { upsertBrandToDatabase } = require('./database/upsertBrandToDatabase');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const BOT_AUTH_TOKEN = process.env.BOT_AUTH_TOKEN;
+if (!BOT_AUTH_TOKEN) throw new Error('BOT_TOKEN не встановлено');
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const bot = new Bot(BOT_AUTH_TOKEN, {
+  botInfo: {
+    id: 7154152032,
+    is_bot: true,
+    first_name: 'Zycsel store bot',
+    username: 'zycsel_bot',
+    can_join_groups: true,
+    can_read_all_group_messages: true,
+    supports_inline_queries: false,
+  },
+});
 
-(async () => {
-  const bot = new Bot(process.env.BOT_AUTH_TOKEN);
-  bot.api.config.use(hydrateFiles(process.env.BOT_AUTH_TOKEN));
+bot.catch((err) => {
+  const errorContext = err.ctx;
+  console.error(`Помилка ${errorContext.update.update_id}`);
+  const error = err.error;
 
-  bot.catch((err) => {
-    const errorContext = err.ctx;
-    console.error(`Помилка ${errorContext.update.update_id}`);
-    const error = err.error;
+  if (error instanceof GrammyError) {
+    console.error('Помилка в запиті:', error.description);
+  } else if (error instanceof HttpError) {
+    console.error('Відсутнє підключення до Telegram:', error);
+  } else {
+    console.error('Unknown error:', error);
+  }
+});
 
-    if (error instanceof GrammyError) {
-      console.error('Помилка в запиті:', error.description);
-    } else if (error instanceof HttpError) {
-      console.error('Відсутнє підключення до Telegram:', error);
-    } else {
-      console.error('Unknown error:', error);
-    }
-  });
+function getSessionKey(ctx) {
+  return ctx.chat?.id.toString();
+}
 
-  function initial() {
-    return {
-      screen: '',
-      isNew: true,
+bot.use(
+  session({
+    initial: () => ({
+      screen: null,
+      isNew: null,
+      size: null,
+      brand: null,
       type: ITEMS_TYPES.clothes,
-      size: '',
-      brand: '',
-    };
+      postsOffset: 0,
+    }),
+  }),
+);
+
+bot.use(sequentialize(getSessionKey));
+
+const throttler = apiThrottler({
+  global: {
+    maxConcurrent: 10,
+    minTime: 500,
+  },
+});
+
+bot.api.config.use(autoRetry());
+bot.use(limit());
+bot.api.config.use(throttler);
+
+bot.api.setMyCommands([{ command: 'start', description: 'Розпочати пошук' }]);
+
+bot.command('start', async (ctx) => {
+  ctx.session.screen = SCREENS.typeSelection;
+  await ctx.reply(
+    'Привіт, на звʼязку бот Zycsel_store🦖 Тут ви можете переглянути всю наявність по брендам/розмірам тощо.',
+    {
+      reply_to_message_id: ctx.msg.message_id,
+    },
+  );
+
+  const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
+  renderControls(ctx);
+});
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+bot.hears('Одяг', async (ctx) => {
+  ctx.session.type = ITEMS_TYPES.clothes;
+  ctx.session.screen = SCREENS.qualitySelection;
+  const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+  renderControls(ctx);
+});
+
+bot.hears('Взуття', async (ctx) => {
+  ctx.session.type = ITEMS_TYPES.shoes;
+  ctx.session.isNew = true;
+  ctx.session.screen = SCREENS.sizeSelection;
+  const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
+  renderControls(ctx);
+});
+
+bot.hears('Аксесуари', async (ctx) => {
+  ctx.session.type = ITEMS_TYPES.accessories;
+  ctx.session.size = null;
+  ctx.session.screen = SCREENS.qualitySelection;
+  const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
+  renderControls(ctx);
+});
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+bot.hears('Нові', async (ctx) => {
+  ctx.session.isNew = true;
+  if (ctx.session.type === ITEMS_TYPES.accessories) {
+    ctx.session.screen = SCREENS.brandSelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
+    renderControls(ctx);
+    return;
   }
 
-  bot.use(session({ initial }));
+  ctx.session.screen = SCREENS.sizeSelection;
+  const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
+  renderControls(ctx);
+});
 
-  await bot.api.setMyCommands([
-    { command: 'start', description: 'Розпочати пошук' },
-  ]);
+bot.hears('Вживані', async (ctx) => {
+  ctx.session.isNew = false;
+  if (ctx.session.type === ITEMS_TYPES.accessories) {
+    ctx.session.screen = SCREENS.brandSelection;
+    const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
+    renderControls(ctx);
+    return;
+  }
+  ctx.session.screen = SCREENS.sizeSelection;
+  const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
+  renderControls(ctx);
+});
 
-  bot.command('start', async (ctx) => {
+bot.hears('Назад', async (ctx) => {
+  if (ctx.session.screen === SCREENS.qualitySelection) {
     ctx.session.screen = SCREENS.typeSelection;
-    await ctx.reply(
-      'Привіт, на звʼязку бот Zycsel_store🦖 Тут ви можете переглянути всю наявність по брендам/розмірам тощо.',
-      {
-        reply_to_message_id: ctx.msg.message_id,
-      },
-    );
-
     const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
     renderControls(ctx);
-  });
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////
-
-  bot.hears('Одяг', async (ctx) => {
-    ctx.session.type = ITEMS_TYPES.clothes;
-    ctx.session.screen = SCREENS.qualitySelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
-    renderControls(ctx);
-  });
-
-  bot.hears('Взуття', async (ctx) => {
-    ctx.session.type = ITEMS_TYPES.shoes;
-    ctx.session.isNew = true;
-    ctx.session.screen = SCREENS.sizeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
-    renderControls(ctx);
-  });
-
-  bot.hears('Аксесуари', async (ctx) => {
-    ctx.session.type = ITEMS_TYPES.accessories;
-    ctx.session.screen = SCREENS.qualitySelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.qualitySelection];
-    renderControls(ctx);
-  });
-  ///////////////////////////////////////////////////////////////////////////////////////////////
-
-  bot.hears('Нові', async (ctx) => {
-    ctx.session.isNew = true;
-    if (ctx.session.type === ITEMS_TYPES.accessories) {
-      ctx.session.screen = SCREENS.brandSelection;
-      const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
+  } else if (ctx.session.screen === SCREENS.sizeSelection) {
+    if (ctx.session.type === ITEMS_TYPES.clothes) {
+      ctx.session.screen = SCREENS.qualitySelection;
+      const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.qualitySelection]];
       renderControls(ctx);
-      return;
-    }
-
-    ctx.session.screen = SCREENS.sizeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
-    renderControls(ctx);
-  });
-
-  bot.hears('Вживані', async (ctx) => {
-    ctx.session.isNew = false;
-    if (ctx.session.type === ITEMS_TYPES.accessories) {
-      ctx.session.screen = SCREENS.brandSelection;
-      const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
-      renderControls(ctx);
-      return;
-    }
-    ctx.session.screen = SCREENS.sizeSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.sizeSelection];
-    renderControls(ctx);
-  });
-
-  bot.hears('Назад', async (ctx) => {
-    if (ctx.session.screen === SCREENS.qualitySelection) {
+    } else {
       ctx.session.screen = SCREENS.typeSelection;
-      const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
+      const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.typeSelection]];
       renderControls(ctx);
-    } else if (ctx.session.screen === SCREENS.sizeSelection) {
-      if (ctx.session.type === ITEMS_TYPES.clothes) {
-        ctx.session.screen = SCREENS.qualitySelection;
-        const renderControls =
-          SCREEN_FACTORY[SCREENS[SCREENS.qualitySelection]];
-        renderControls(ctx);
-      } else {
-        ctx.session.screen = SCREENS.typeSelection;
-        const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.typeSelection]];
-        renderControls(ctx);
-      }
-    } else if (ctx.session.screen === SCREENS.brandSelection) {
-      if (
-        ctx.session.type === ITEMS_TYPES.clothes ||
-        ctx.session.type === ITEMS_TYPES.shoes
-      ) {
-        ctx.session.screen = SCREENS.sizeSelection;
-        const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.sizeSelection]];
-        renderControls(ctx);
-      } else if (ctx.session.type === ITEMS_TYPES.accessories) {
-        ctx.session.screen = SCREENS.qualitySelection;
-        const renderControls =
-          SCREEN_FACTORY[SCREENS[SCREENS.qualitySelection]];
-        renderControls(ctx);
-      }
     }
-  });
+  } else if (ctx.session.screen === SCREENS.brandSelection) {
+    if (
+      ctx.session.type === ITEMS_TYPES.clothes ||
+      ctx.session.type === ITEMS_TYPES.shoes
+    ) {
+      ctx.session.screen = SCREENS.sizeSelection;
+      const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.sizeSelection]];
+      renderControls(ctx);
+    } else if (ctx.session.type === ITEMS_TYPES.accessories) {
+      ctx.session.screen = SCREENS.qualitySelection;
+      const renderControls = SCREEN_FACTORY[SCREENS[SCREENS.qualitySelection]];
+      renderControls(ctx);
+    }
+  }
+});
 
-  const botOnSizeEvents = (sizes) => {
-    sizes.map((label) => {
-      return bot.hears(label, async (ctx) => {
-        ctx.session.size = label;
-        ctx.session.screen = SCREENS.brandSelection;
-        const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
-        renderControls(ctx);
-      });
+const botOnSizeEvents = (sizes) => {
+  sizes.map((label) => {
+    return bot.hears(label, async (ctx) => {
+      ctx.session.size = label;
+      ctx.session.screen = SCREENS.brandSelection;
+      const renderControls = SCREEN_FACTORY[SCREENS.brandSelection];
+      renderControls(ctx);
     });
-  };
-
-  botOnSizeEvents(CLOTHING_SIZES);
-  botOnSizeEvents(SHOES_SIZES);
-
-  /////////////////////////////////////////////////////////////////////////////////////////
-
-  bot.hears('Всі бренди', async (ctx) => {
-    ctx.session.brand = '';
-    ctx.session.screen = SCREENS.itemsSearchSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
-    renderControls(ctx);
-
-    const channelPosts = await getChannelPosts(
-      ctx.session.isNew,
-      ctx.session.type,
-      ctx.session.size,
-      ctx.session.brand,
-    );
-
-    if (channelPosts.length <= 0) {
-      ctx.reply('За вашим запитом ще немає речей');
-    } else {
-      ctx.reply('Перелік речей за вашим запитом:');
-      await renderChannelPosts(ctx, channelPosts);
-    }
   });
+};
 
-  const brandsRegExp = new RegExp(`[\\p{${BUTTONS_ICONS.brandsIcon}}]`);
+botOnSizeEvents(CLOTHING_SIZES);
+botOnSizeEvents(SHOES_SIZES);
 
-  bot.hears(brandsRegExp, async (ctx) => {
-    ctx.session.brand = ctx.match.input.replace(BUTTONS_ICONS.brandsIcon, '');
-    ctx.session.screen = SCREENS.itemsSearchSelection;
-    const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
-    renderControls(ctx);
+/////////////////////////////////////////////////////////////////////////////////////////
 
-    const channelPosts = await getChannelPosts(
-      ctx.session.isNew,
-      ctx.session.type,
-      ctx.session.size,
-      ctx.session.brand,
-    );
+bot.hears('Всі бренди', async (ctx) => {
+  ctx.session.brand = null;
+  ctx.session.screen = SCREENS.itemsSearchSelection;
+  await ctx.reply(`Ви обрали всі бренди`);
 
-    if (channelPosts.length <= 0) {
-      ctx.reply('За вашим запитом ще немає речей');
-    } else {
-      ctx.reply('Перелік речей за вашим запитом:');
-      await renderChannelPosts(ctx, channelPosts);
-    }
-  });
+  const channelPosts = await getAllChannelPostsIds(
+    ctx.session.type,
+    ctx.session.isNew,
+    ctx.session.size,
+    null,
+  );
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////
+  if (channelPosts.length <= 0) {
+    ctx.reply('За вашим запитом ще немає речей');
+  } else {
+    ctx.reply('Перелік речей за вашим запитом:');
+    await forwardChannelPostsByIds(ctx, channelPosts, ctx.session.postsOffset);
+  }
+});
 
-  bot.hears('Знайти інші речі', async (ctx) => {
-    ctx.session.isNew = null;
-    ctx.session.type = '';
-    ctx.session.size = '';
-    ctx.session.brand = '';
-    ctx.session.screen = SCREENS.typeSelection;
+bot.hears(BRANDS_EVENT_REGEXP, async (ctx) => {
+  ctx.session.brand = ctx.match.input.replace(BUTTONS_ICONS.brandsIcon, '');
+  ctx.session.screen = SCREENS.itemsSearchSelection;
+  await ctx.reply(`Ви обрали бренд ${ctx.session.brand}`);
 
-    const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
-    renderControls(ctx);
-  });
+  const channelPosts = await getAllChannelPostsIds(
+    ctx.session.type,
+    ctx.session.isNew,
+    ctx.session.size,
+    ctx.session.brand,
+  );
 
-  ////////////////////////////////////////////////////////////////////////////////////
+  if (channelPosts.length <= 0) {
+    ctx.reply('За вашим запитом ще немає речей');
+  } else {
+    ctx.reply('Перелік речей за вашим запитом:');
+    await forwardChannelPostsByIds(ctx, channelPosts, ctx.session.postsOffset);
+  }
+});
 
-  bot.on('channel_post:media', async (ctx) => {
-    const channelPostData = ctx.update.channel_post;
+///////////////////////////////////////////////////////////////////////////////////////////////
+bot.hears('Завантажити ще', async (ctx) => {
+  ctx.session.postsOffset += 10;
 
-    let messageId;
-    let mediaGroupId;
-    let mediaType;
-    let postCaption;
-    let isNew;
-    let isInStock;
-    let createdAtDate;
-    let editAtDate;
-    let brand;
-    let itemType;
+  const channelPosts = await getAllChannelPostsIds(
+    ctx.session.type,
+    ctx.session.isNew,
+    ctx.session.size,
+    ctx.session.brand,
+  );
+
+  await forwardChannelPostsByIds(ctx, channelPosts, ctx.session.postsOffset);
+});
+
+bot.hears('Знайти інші речі', async (ctx) => {
+  ctx.session.isNew = null;
+  ctx.session.type = null;
+  ctx.session.size = null;
+  ctx.session.brand = null;
+  ctx.session.screen = SCREENS.typeSelection;
+  ctx.session.postsOffset = 0;
+
+  const renderControls = SCREEN_FACTORY[SCREENS.typeSelection];
+  renderControls(ctx);
+});
+
+////////////////////////////////////////////////////////////////////////////////////
+
+bot.on('channel_post:media', async (ctx) => {
+  const channelPostData = ctx.update.channel_post;
+
+  let messageId = null;
+  let mediaGroupId = null;
+  let postCaption;
+
+  if (channelPostData.media_group_id) {
+    mediaGroupId = channelPostData.media_group_id;
+  }
+
+  if (channelPostData.message_id) {
+    messageId = channelPostData.message_id;
+  }
+
+  if (channelPostData.caption) {
+    let isNew = null;
+    let isInStock = null;
+    let createdAtDate = null;
+    let editedAtDate = null;
+    let brand = null;
+    let itemType = null;
     let sizes = [];
 
-    if (channelPostData.caption) {
-      postCaption = channelPostData.caption;
+    postCaption = channelPostData.caption;
 
-      if (channelPostData.caption.includes('#взуття')) {
-        itemType = ITEMS_TYPES.shoes;
-      } else if (channelPostData.caption.includes('#аксесуари')) {
-        itemType = ITEMS_TYPES.accessories;
-      } else itemType = ITEMS_TYPES.clothes;
+    if (channelPostData.caption.includes('#взуття')) {
+      itemType = ITEMS_TYPES.shoes;
+    } else if (channelPostData.caption.includes('#аксесуари')) {
+      itemType = ITEMS_TYPES.accessories;
+    } else itemType = ITEMS_TYPES.clothes;
 
-      if (channelPostData.caption.match(SIZE_REGEXP)) {
-        const channelPostSizes = channelPostData.caption
-          .match(SIZE_REGEXP)
-          .map((size) => {
-            size = size.replace('#розмір_', '');
-            return ` ${size} `;
-          })
-          .join(' ');
-
-        sizes = channelPostSizes;
-      }
-
-      if (channelPostData.caption.match(BRAND_REGEXP)) {
-        brand = channelPostData.caption
-          .match(BRAND_REGEXP)[0]
-          .replace('#бренд_', '')
-          .replace(/_/g, ' ')
-          .split(' ')
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-
-        await upsertBrandToDatabase(brand);
-      }
-
-      isInStock =
-        channelPostData.caption.includes('#в_наявності') ||
-        !channelPostData.caption.includes('ПРОДАНО');
-
-      isNew =
-        channelPostData.caption.includes('#нове') ||
-        channelPostData.caption.includes('Нова');
-
-      if (channelPostData.date) {
-        createdAtDate = moment
-          .unix(channelPostData.date)
-          .utc()
-          .format('YYYY-MM-DD HH:mm:ssZ');
-      }
-
-      if (channelPostData.edit_date) {
-        editAtDate = moment
-          .unix(channelPostData.edit_date)
-          .utc()
-          .format('YYYY-MM-DD HH:mm:ssZ');
-      }
-    }
-
-    if (channelPostData.media_group_id) {
-      mediaGroupId = channelPostData.media_group_id;
-    }
-
-    if (channelPostData.message_id) {
-      messageId = channelPostData.message_id;
-    }
-
-    const isPostInDatabase = await supabase
-      .from(TABLES.postsTable)
-      .select('messages-ids')
-      .eq('media-group-id', mediaGroupId);
-
-    if (isPostInDatabase.data.length <= 0) {
-      const emptyPostMessagesIds = await supabase
-        .from(TABLES.postsTable)
-        .insert({
-          'media-group-id': mediaGroupId,
-          'messages-ids': messageId,
-        });
-
-      if (channelPostData.caption) {
-        await updatePostDataToDatabase(
-          mediaGroupId,
-          postCaption,
-          createdAtDate,
-          editAtDate,
-          isNew,
-          isInStock,
-          brand,
-          sizes,
-          itemType,
-        );
-      }
-    } else {
-      const existingPostMessageIds = await supabase
-        .from(TABLES.postsTable)
-        .update({
-          'messages-ids': [
-            isPostInDatabase.data[0]['messages-ids'].split(' '),
-            messageId,
-          ].join(','),
+    if (channelPostData.caption.match(SIZE_REGEXP)) {
+      const channelPostSizes = channelPostData.caption
+        .match(SIZE_REGEXP)
+        .map((size) => {
+          size = size.replace('#розмір_', '');
+          return ` ${size} `;
         })
-        .eq('media-group-id', mediaGroupId);
+        .join(' ');
 
-      if (channelPostData.caption) {
-        await updatePostDataToDatabase(
-          mediaGroupId,
-          postCaption,
-          createdAtDate,
-          editAtDate,
-          isNew,
-          isInStock,
-          brand,
-          sizes,
-          itemType,
-        );
-      }
+      sizes = channelPostSizes;
     }
 
-    if (channelPostData.photo) {
-      mediaType = 'photo';
-      await uploadPhotoToStorage(ctx, channelPostData.message_id);
-    } else if (channelPostData.video) {
-      mediaType = 'video';
-      await uploadVideoToStorage(ctx, channelPostData.message_id);
+    if (channelPostData.caption.match(BRAND_REGEXP)) {
+      brand = channelPostData.caption
+        .match(BRAND_REGEXP)[0]
+        .replace('#бренд_', '')
+        .replace(/_/g, ' ')
+        .split(' ')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+      await upsertBrandToDatabase(brand);
     }
 
-    upsertMediaToDatabase(channelPostData.message_id, mediaGroupId, mediaType);
-  });
+    isInStock =
+      channelPostData.caption.includes('#в_наявності') ||
+      !channelPostData.caption.includes('ПРОДАНО');
 
-  //////////////////////////////////////////////////////////////////////////////////////
+    isNew =
+      channelPostData.caption.includes('#нове') ||
+      channelPostData.caption.includes('Нова');
 
-  bot.on('edited_channel_post:media', async (ctx) => {
-    const editedChannelPostData = ctx.update.edited_channel_post;
+    if (channelPostData.date) {
+      createdAtDate = moment
+        .unix(channelPostData.date)
+        .utc()
+        .format('YYYY-MM-DD HH:mm:ssZ');
+    }
 
-    let messageId;
-    let mediaGroupId;
-    let editAtDate;
-    let mediaType;
-    let postCaption;
+    await upsertPost(
+      mediaGroupId,
+      isInStock,
+      itemType,
+      isNew,
+      sizes,
+      brand,
+      createdAtDate,
+      editedAtDate,
+    );
+  }
+
+  await upsertMessage(mediaGroupId, messageId);
+});
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+bot.on('edited_channel_post:media', async (ctx) => {
+  const editedChannelPostData = ctx.update.edited_channel_post;
+
+  let messageId;
+  let mediaGroupId;
+  let postCaption;
+
+  if (editedChannelPostData.message_id) {
+    messageId = editedChannelPostData.message_id;
+  }
+
+  if (editedChannelPostData.media_group_id) {
+    mediaGroupId = editedChannelPostData.media_group_id;
+  }
+
+  if (editedChannelPostData.caption) {
     let isNew;
     let isInStock;
     let brand = '';
     let sizes = [];
+    let createdAtDate;
+    let editAtDate;
     let itemType;
 
-    if (editedChannelPostData.message_id) {
-      messageId = editedChannelPostData.message_id;
+    postCaption = editedChannelPostData.caption;
+
+    if (editedChannelPostData.caption.includes('#взуття')) {
+      itemType = ITEMS_TYPES.shoes;
+    } else if (editedChannelPostData.caption.includes('#аксесуари')) {
+      itemType = ITEMS_TYPES.accessories;
+    } else itemType = ITEMS_TYPES.clothes;
+
+    if (editedChannelPostData.caption.match(SIZE_REGEXP)) {
+      const channelPostSizes = editedChannelPostData.caption
+        .match(SIZE_REGEXP)
+        .map((size) => {
+          size = size.replace('#розмір_', '');
+          return ` ${size} `;
+        })
+        .join(',');
+      sizes = channelPostSizes;
     }
 
-    if (editedChannelPostData.media_group_id) {
-      mediaGroupId = editedChannelPostData.media_group_id;
+    if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
+      brand = editedChannelPostData.caption
+        .match(BRAND_REGEXP)[0]
+        .replace('#бренд_', '')
+        .replace('_', '.')
+        .replace(/_/g, ' ')
+        .split(' ')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
     }
 
-    if (editedChannelPostData.caption) {
-      postCaption = editedChannelPostData.caption;
+    isInStock = editedChannelPostData.caption.includes('#в_наявності');
 
-      if (editedChannelPostData.caption.includes('#взуття')) {
-        itemType = ITEMS_TYPES.shoes;
-      } else if (editedChannelPostData.caption.includes('#аксесуари')) {
-        itemType = ITEMS_TYPES.accessories;
-      } else itemType = ITEMS_TYPES.clothes;
+    isNew =
+      editedChannelPostData.caption.includes('#нове') ||
+      editedChannelPostData.caption.includes('Нова');
 
-      if (editedChannelPostData.caption.match(SIZE_REGEXP)) {
-        const channelPostSizes = editedChannelPostData.caption
-          .match(SIZE_REGEXP)
-          .map((size) => {
-            size = size.replace('#розмір_', '');
-            return ` ${size} `;
-          })
-          .join(',');
-        sizes = channelPostSizes;
-      }
-
-      if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
-        brand = editedChannelPostData.caption
-          .match(BRAND_REGEXP)[0]
-          .replace('#бренд_', '')
-          .replace(/_/g, ' ')
-          .split(' ')
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-      }
-
-      isInStock = editedChannelPostData.caption.includes('#в_наявності');
-
-      isNew =
-        editedChannelPostData.caption.includes('#нове') ||
-        editedChannelPostData.caption.includes('Нова');
-
-      if (editedChannelPostData.date) {
-        createdAtDate = moment
-          .unix(editedChannelPostData.date)
-          .utc()
-          .format('YYYY-MM-DD HH:mm:ssZ');
-      }
-
-      if (editedChannelPostData.edit_date) {
-        editAtDate = moment
-          .unix(editedChannelPostData.edit_date)
-          .utc()
-          .format('YYYY-MM-DD HH:mm:ssZ');
-      }
-
-      await updatePostDataToDatabase(
-        mediaGroupId,
-        postCaption,
-        createdAtDate,
-        editAtDate,
-        isNew,
-        isInStock,
-        brand,
-        sizes,
-        itemType,
-      );
+    if (editedChannelPostData.date) {
+      createdAtDate = moment
+        .unix(editedChannelPostData.date)
+        .utc()
+        .format('YYYY-MM-DD HH:mm:ssZ');
     }
 
-    let currentMessagesIds = await supabase
-      .from('Post-messages-media')
-      .select('media-type, id')
-      .eq('media-group-id', mediaGroupId);
-
-    if (!isInStock) {
-      currentMessagesIds = currentMessagesIds.data.map((id) => {
-        return (id =
-          id['media-type'] === 'photo' ? `${id.id}.jpg` : `${id.id}.mp4`);
-      });
-
-      const deleteMediaFromStorage = await supabase.storage
-        .from(TABLES.mediaStorage)
-        .remove(currentMessagesIds);
-    } else {
-      currentMessagesIds = currentMessagesIds.data.forEach(async (id) => {
-        if (editedChannelPostData.photo) {
-          mediaType = 'photo';
-          await uploadPhotoToStorage(ctx, id.id);
-        } else if (editedChannelPostData.video) {
-          mediaType = 'video';
-          await uploadVideoToStorage(ctx, id.id);
-        }
-      });
+    if (editedChannelPostData.edit_date) {
+      editAtDate = moment
+        .unix(editedChannelPostData.edit_date)
+        .utc()
+        .format('YYYY-MM-DD HH:mm:ssZ');
     }
 
-    await upsertMediaToDatabase(messageId, mediaGroupId, mediaType);
-  });
+    await upsertPost(
+      mediaGroupId,
+      isInStock,
+      itemType,
+      isNew,
+      sizes,
+      brand,
+      createdAtDate,
+      editAtDate,
+    );
+  }
 
-  bot.start();
-})();
+  await upsertMessage(mediaGroupId, messageId);
+});
+
+const runner = run(bot);
+
+const stopRunner = () => runner.isRunning() && runner.stop();
+process.once('SIGINT', stopRunner);
+process.once('SIGTERM', stopRunner);
