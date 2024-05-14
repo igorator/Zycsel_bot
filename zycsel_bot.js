@@ -22,6 +22,11 @@ const {
   BUTTONS_ICONS,
 } = require('./components/constants');
 
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Our app is running on port ${PORT}`);
+});
+
 const BOT_AUTH_TOKEN = process.env.BOT_AUTH_TOKEN;
 if (!BOT_AUTH_TOKEN) throw new Error('BOT_TOKEN не встановлено');
 

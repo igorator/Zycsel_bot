@@ -6,9 +6,9 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
-  const filteredMessagesIds = [];
-
   try {
+    const filteredMessagesIds = [];
+
     let query = supabase
       .from(TABLES.channelPosts)
       .select('media-group-id')
@@ -17,27 +17,29 @@ const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
       .eq('is-new', isNew)
       .order('created-at-date', { ascending: true });
 
-    if (brand !== null) {
-      query = query.eq('brand', brand);
-    }
-
     if (size !== null) {
       query = query.ilike('sizes', `% ${size} %`);
     }
 
+    if (brand !== null) {
+      query = query.eq('brand', brand);
+    }
+
     const { data } = await query;
 
-    for (const mediaGroupId of data) {
-      let messagesIds = await supabase
-        .from(TABLES.messagesIds)
-        .select('message-id')
-        .eq('media-group-id', mediaGroupId['media-group-id']);
+    if (data) {
+      for (const mediaGroupId of data) {
+        let messagesIds = await supabase
+          .from(TABLES.messagesIds)
+          .select('message-id')
+          .eq('media-group-id', mediaGroupId['media-group-id']);
 
-      messagesIds = messagesIds.data
-        .map((messageId) => messageId['message-id'])
-        .sort((a, b) => a - b);
+        messagesIds = messagesIds.data
+          .map((messageId) => messageId['message-id'])
+          .sort((a, b) => a - b);
 
-      filteredMessagesIds.push(messagesIds);
+        filteredMessagesIds.push(messagesIds);
+      }
     }
 
     return filteredMessagesIds;
