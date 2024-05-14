@@ -20,8 +20,6 @@ const getChannelPostsBrands = async (itemType, isNew, size) => {
 
     const { data } = await query;
 
-    console.log(data);
-
     let filteredBrands = data.map((brand) => brand.brand);
 
     filteredBrands = Array.from(new Set(filteredBrands));

@@ -28,8 +28,6 @@ const upsertPost = async (
       'edited-at-date': editAtDate,
     })
     .select();
-
-  console.log(upsertedPost);
 };
 
 const upsertMessage = async (mediaGroupId, messageId) => {
@@ -40,8 +38,6 @@ const upsertMessage = async (mediaGroupId, messageId) => {
       'message-id': messageId,
     })
     .select();
-
-  console.log(upsertedMessage);
 };
 
 module.exports = { upsertMessage, upsertPost };

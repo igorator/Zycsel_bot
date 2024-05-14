@@ -1,7 +1,9 @@
 require('dotenv').config();
 const moment = require('moment');
-const { getAllChannelPosts } = require('./database/getAllChannelPosts');
-const { renderChannelPosts } = require('./render/renderChannelPosts');
+const { getAllChannelPostsIds } = require('./database/getAllChannelPosts');
+const {
+  forwardChannelPostsByIds,
+} = require('./render/forwardChannelPostsByIds');
 const { upsertMessage, upsertPost } = require('./database/upsertData');
 const { autoRetry } = require('@grammyjs/auto-retry');
 const { limit } = require('@grammyjs/ratelimiter');
@@ -23,7 +25,17 @@ const {
 const BOT_AUTH_TOKEN = process.env.BOT_AUTH_TOKEN;
 if (!BOT_AUTH_TOKEN) throw new Error('BOT_TOKEN не встановлено');
 
-const bot = new Bot(BOT_AUTH_TOKEN);
+const bot = new Bot(BOT_AUTH_TOKEN, {
+  botInfo: {
+    id: 7154152032,
+    is_bot: true,
+    first_name: 'Zycsel store bot',
+    username: 'zycsel_bot',
+    can_join_groups: true,
+    can_read_all_group_messages: true,
+    supports_inline_queries: false,
+  },
+});
 
 bot.catch((err) => {
   const errorContext = err.ctx;
@@ -189,7 +201,7 @@ bot.hears('Всі бренди', async (ctx) => {
   ctx.session.screen = SCREENS.itemsSearchSelection;
   await ctx.reply(`Ви обрали всі бренди`);
 
-  const channelPosts = await getAllChannelPosts(
+  const channelPosts = await getAllChannelPostsIds(
     ctx.session.type,
     ctx.session.isNew,
     ctx.session.size,
@@ -200,7 +212,7 @@ bot.hears('Всі бренди', async (ctx) => {
     ctx.reply('За вашим запитом ще немає речей');
   } else {
     ctx.reply('Перелік речей за вашим запитом:');
-    await renderChannelPosts(ctx, channelPosts, ctx.session.postsOffset);
+    await forwardChannelPostsByIds(ctx, channelPosts, ctx.session.postsOffset);
   }
 });
 
@@ -209,7 +221,7 @@ bot.hears(BRANDS_EVENT_REGEXP, async (ctx) => {
   ctx.session.screen = SCREENS.itemsSearchSelection;
   await ctx.reply(`Ви обрали бренд ${ctx.session.brand}`);
 
-  const channelPosts = await getAllChannelPosts(
+  const channelPosts = await getAllChannelPostsIds(
     ctx.session.type,
     ctx.session.isNew,
     ctx.session.size,
@@ -220,7 +232,7 @@ bot.hears(BRANDS_EVENT_REGEXP, async (ctx) => {
     ctx.reply('За вашим запитом ще немає речей');
   } else {
     ctx.reply('Перелік речей за вашим запитом:');
-    await renderChannelPosts(ctx, channelPosts, ctx.session.postsOffset);
+    await forwardChannelPostsByIds(ctx, channelPosts, ctx.session.postsOffset);
   }
 });
 
@@ -228,14 +240,14 @@ bot.hears(BRANDS_EVENT_REGEXP, async (ctx) => {
 bot.hears('Завантажити ще', async (ctx) => {
   ctx.session.postsOffset += 10;
 
-  const channelPosts = await getAllChannelPosts(
+  const channelPosts = await getAllChannelPostsIds(
     ctx.session.type,
     ctx.session.isNew,
     ctx.session.size,
     ctx.session.brand,
   );
 
-  await renderChannelPosts(ctx, channelPosts, ctx.session.postsOffset);
+  await forwardChannelPostsByIds(ctx, channelPosts, ctx.session.postsOffset);
 });
 
 bot.hears('Знайти інші речі', async (ctx) => {

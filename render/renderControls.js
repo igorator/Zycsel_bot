@@ -54,7 +54,6 @@ const renderSizeControls = async (ctx) => {
     sizeButtons = SHOES_SIZES.filter((label) => sizeButtons.includes(label));
   }
 
-  console.log(sizeButtons);
   const msgReply =
     ctx.match === 'Назад'
       ? 'Оберіть розмір речей'

@@ -1,10 +1,10 @@
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const { SCREEN_FACTORY } = require('../render/renderControls');
+const { SCREEN_FACTORY } = require('./renderControls');
 const { SCREENS } = require('../components/constants');
 
-const renderChannelPosts = async (ctx, channelPosts, postOffset) => {
+const forwardChannelPostsByIds = async (ctx, channelPosts, postOffset) => {
   let postCounter = 0;
-  console.log(channelPosts.length);
+
   for (let i = postOffset; i < channelPosts.length; i++) {
     const messagesIds = channelPosts[i];
     await ctx.api.forwardMessages(ctx.chat.id, CHANNEL_ID, messagesIds);
@@ -25,6 +25,4 @@ const renderChannelPosts = async (ctx, channelPosts, postOffset) => {
   }
 };
 
-module.exports = { renderChannelPosts };
-
-module.exports = { renderChannelPosts };
+module.exports = { forwardChannelPostsByIds };

@@ -5,7 +5,7 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const getAllChannelPosts = async (itemType, isNew, size, brand) => {
+const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
   const filteredMessagesIds = [];
 
   try {
@@ -48,5 +48,5 @@ const getAllChannelPosts = async (itemType, isNew, size, brand) => {
 };
 
 module.exports = {
-  getAllChannelPosts,
+  getAllChannelPostsIds,
 };
