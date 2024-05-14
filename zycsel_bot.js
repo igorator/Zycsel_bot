@@ -327,9 +327,7 @@ bot.on('channel_post:media', async (ctx) => {
       await upsertBrandToDatabase(brand);
     }
 
-    isInStock =
-      channelPostData.caption.includes('#в_наявності') ||
-      !channelPostData.caption.includes('ПРОДАНО');
+    isInStock = channelPostData.caption.includes('#в_наявності');
 
     isNew =
       channelPostData.caption.includes('#нове') ||
@@ -375,8 +373,8 @@ bot.on('edited_channel_post:media', async (ctx) => {
   }
 
   if (editedChannelPostData.caption) {
-    let isNew;
-    let isInStock;
+    let isNew = null;
+    let isInStock = null;
     let brand = '';
     let sizes = [];
     let createdAtDate;
