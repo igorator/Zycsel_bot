@@ -15,7 +15,7 @@ const upsertPost = async (
   createdAtDate,
   editAtDate,
 ) => {
-  const upsertedPost = await supabase
+  const { data, error } = await supabase
     .from(TABLES.channelPosts)
     .upsert({
       'media-group-id': mediaGroupId,
@@ -28,16 +28,20 @@ const upsertPost = async (
       'edited-at-date': editAtDate,
     })
     .select();
+
+  console.log(error);
 };
 
 const upsertMessage = async (mediaGroupId, messageId) => {
-  const upsertedMessage = await supabase
+  const { data, error } = await supabase
     .from(TABLES.messagesIds)
     .upsert({
       'media-group-id': mediaGroupId,
       'message-id': messageId,
     })
     .select();
+
+  console.log(error);
 };
 
 module.exports = { upsertMessage, upsertPost };

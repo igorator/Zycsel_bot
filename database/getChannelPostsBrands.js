@@ -11,14 +11,23 @@ const getChannelPostsBrands = async (itemType, isNew, size) => {
       .from(TABLES.channelPosts)
       .select('brand')
       .eq('is-in-stock', true)
-      .eq('type', itemType)
-      .eq('is-new', isNew);
+      .eq('type', itemType);
 
     if (size !== null) {
       query = query.ilike('sizes', `% ${size} %`);
     }
 
-    const { data } = await query;
+    if (isNew !== null) {
+      query = query.eq('is-new', isNew);
+    }
+
+    const { data, error } = await query;
+
+    console.log(error);
+
+    if (!data) {
+      return [];
+    }
 
     let filteredBrands = data.map((brand) => brand.brand);
 

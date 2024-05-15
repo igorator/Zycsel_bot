@@ -25,7 +25,9 @@ const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
       query = query.eq('brand', brand);
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+
+    console.log(error);
 
     if (data) {
       for (const mediaGroupId of data) {
