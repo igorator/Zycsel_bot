@@ -10,7 +10,7 @@ const getChannelPostsSizes = async (itemType, isNew) => {
     const { data, error } = await supabase
       .from(TABLES.channelPosts)
       .select('sizes')
-      .eq('is-in-stock', true)
+      .is('is-in-stock', true)
       .eq('type', itemType)
       .eq('is-new', isNew);
 

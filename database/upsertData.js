@@ -17,31 +17,51 @@ const upsertPost = async (
 ) => {
   const { data, error } = await supabase
     .from(TABLES.channelPosts)
-    .upsert({
-      'media-group-id': mediaGroupId,
-      'is-in-stock': isInStock,
-      'type': itemType,
-      'is-new': isNew,
-      'sizes': sizes,
-      'brand': brand,
-      'created-at-date': createdAtDate,
-      'edited-at-date': editAtDate,
-    })
+    .upsert(
+      {
+        'media-group-id': mediaGroupId,
+        'is-in-stock': isInStock,
+        'type': itemType,
+        'is-new': isNew,
+        'sizes': sizes,
+        'brand': brand,
+        'created-at-date': createdAtDate,
+        'edited-at-date': editAtDate,
+      },
+      {
+        onConflict: ['media-group-id'],
+        ignoreDuplicates: false,
+      },
+    )
     .select();
 
-  console.log(error);
+  if (error) {
+    console.error('Error upserting post:', error);
+  } else {
+    console.log('Upserted post data:', data);
+  }
 };
 
 const upsertMessage = async (mediaGroupId, messageId) => {
   const { data, error } = await supabase
     .from(TABLES.messagesIds)
-    .upsert({
-      'media-group-id': mediaGroupId,
-      'message-id': messageId,
-    })
+    .upsert(
+      {
+        'media-group-id': mediaGroupId,
+        'message-id': messageId,
+      },
+      {
+        onConflict: ['message-id'],
+        ignoreDuplicates: false,
+      },
+    )
     .select();
 
-  console.log(error);
+  if (error) {
+    console.error('Error upserting message:', error);
+  } else {
+    console.log('Upserted message data:', data);
+  }
 };
 
 module.exports = { upsertMessage, upsertPost };

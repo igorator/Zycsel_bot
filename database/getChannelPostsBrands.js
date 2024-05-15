@@ -10,7 +10,7 @@ const getChannelPostsBrands = async (itemType, isNew, size) => {
     let query = supabase
       .from(TABLES.channelPosts)
       .select('brand')
-      .eq('is-in-stock', true)
+      .is('is-in-stock', true)
       .eq('type', itemType);
 
     if (size !== null) {

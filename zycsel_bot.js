@@ -308,6 +308,7 @@ bot.on('channel_post:media', async (ctx) => {
         .match(SIZE_REGEXP)
         .map((size) => {
           size = size.replace('#розмір_', '');
+          size = size.replace('_', '.');
           return ` ${size} `;
         })
         .join(' ');
@@ -394,17 +395,19 @@ bot.on('edited_channel_post:media', async (ctx) => {
         .match(SIZE_REGEXP)
         .map((size) => {
           size = size.replace('#розмір_', '');
+          size = size.replace('_', '.');
           return ` ${size} `;
         })
         .join(',');
       sizes = channelPostSizes;
+
+      console.log(sizes);
     }
 
     if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
       brand = editedChannelPostData.caption
         .match(BRAND_REGEXP)[0]
         .replace('#бренд_', '')
-        .replace('_', '.')
         .replace(/_/g, ' ')
         .split(' ')
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
