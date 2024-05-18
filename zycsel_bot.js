@@ -22,6 +22,7 @@ const {
   BUTTONS_ICONS,
 } = require('./components/constants');
 const express = require('express');
+const { deletePost } = require('./database/deleteData');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -276,7 +277,6 @@ bot.on('channel_post:media', async (ctx) => {
 
   let messageId = null;
   let mediaGroupId = null;
-  let postCaption;
 
   if (channelPostData.media_group_id) {
     mediaGroupId = channelPostData.media_group_id;
@@ -294,8 +294,6 @@ bot.on('channel_post:media', async (ctx) => {
     let brand = null;
     let itemType = null;
     let sizes = [];
-
-    postCaption = channelPostData.caption;
 
     if (channelPostData.caption.includes('#взуття')) {
       itemType = ITEMS_TYPES.shoes;
@@ -363,7 +361,6 @@ bot.on('edited_channel_post:media', async (ctx) => {
 
   let messageId;
   let mediaGroupId;
-  let postCaption;
 
   if (editedChannelPostData.message_id) {
     messageId = editedChannelPostData.message_id;
@@ -376,13 +373,11 @@ bot.on('edited_channel_post:media', async (ctx) => {
   if (editedChannelPostData.caption) {
     let isNew = null;
     let isInStock = null;
-    let brand = '';
+    let createdAtDate = null;
+    let editedAtDate = null;
+    let brand = null;
+    let itemType = null;
     let sizes = [];
-    let createdAtDate;
-    let editAtDate;
-    let itemType;
-
-    postCaption = editedChannelPostData.caption;
 
     if (editedChannelPostData.caption.includes('#взуття')) {
       itemType = ITEMS_TYPES.shoes;
@@ -428,22 +423,26 @@ bot.on('edited_channel_post:media', async (ctx) => {
     }
 
     if (editedChannelPostData.edit_date) {
-      editAtDate = moment
+      editedAtDate = moment
         .unix(editedChannelPostData.edit_date)
         .utc()
         .format('YYYY-MM-DD HH:mm:ssZ');
     }
 
-    await upsertPost(
-      mediaGroupId,
-      isInStock,
-      itemType,
-      isNew,
-      sizes,
-      brand,
-      createdAtDate,
-      editAtDate,
-    );
+    if (isInStock) {
+      await upsertPost(
+        mediaGroupId,
+        isInStock,
+        itemType,
+        isNew,
+        sizes,
+        brand,
+        createdAtDate,
+        editedAtDate,
+      );
+    } else {
+      deletePost(mediaGroupId);
+    }
   }
 
   await upsertMessage(mediaGroupId, messageId);
