@@ -12,7 +12,7 @@ const deletePost = async (mediaGroupId) => {
     .eq('media-group-id', mediaGroupId);
 
   if (error) {
-    console.error('Error upserting post:', error);
+    console.error('Error deleting post:', error);
   } else {
     console.log('Deleted post:', data);
   }
@@ -25,7 +25,7 @@ const deteleMessage = async (mediaGroupId) => {
     .eq('media-group-id', mediaGroupId);
 
   if (error) {
-    console.error('Error upserting message:', error);
+    console.error('Error deleting message:', error);
   } else {
     console.log('Deleted message data:', data);
   }

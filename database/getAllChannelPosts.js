@@ -12,7 +12,7 @@ const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
     let query = supabase
       .from(TABLES.channelPosts)
       .select('media-group-id')
-      .is('is-in-stock', true)
+      .eq('is-in-stock', true)
       .eq('type', itemType)
       .eq('is-new', isNew)
       .order('created-at-date', { ascending: true });

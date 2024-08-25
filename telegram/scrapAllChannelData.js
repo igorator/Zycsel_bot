@@ -11,7 +11,6 @@ import('export-to-csv').then(
 const fs = require('fs');
 const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
-const input = require('input');
 const moment = require('moment');
 const { SIZE_REGEXP, BRAND_REGEXP } = require('../components/constants');
 
@@ -27,15 +26,6 @@ const clientMan = new TelegramClient(stringSessionMan, apiId, apiHash, {
   connectionRetries: 5,
 });
 
-const loginClient = async () => {
-  await clientMan.start({
-    phoneNumber: async () => await input.text('number ?'),
-    password: async () => await input.text('password?'),
-    phoneCode: async () => await input.text('code ?'),
-    onError: (err) => console.error(err),
-  });
-};
-
 const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
@@ -44,10 +34,6 @@ module.exports = { sleep };
 
 (async () => {
   await clientMan.connect();
-
-  if (!clientMan) {
-    loginClient();
-  }
 
   const PostsCsvConfig = mkConfig({
     filename: 'Posts',
@@ -117,12 +103,6 @@ module.exports = { sleep };
 
         if (message.groupedId) {
           mediaGroupId = message.groupedId.toString();
-        }
-
-        if (message.media.photo) {
-          mediaType = 'photo';
-        } else if (message.media.document) {
-          mediaType = 'video';
         }
 
         if (message.message) {
@@ -195,13 +175,11 @@ module.exports = { sleep };
     const messagesIdsDataFiltered = [];
 
     ALL_DATA.forEach((message) => {
-      // Фильтрация по медиа-идентификаторам
       messagesIdsDataFiltered.push({
         'message-id': message.id,
         'media-group-id': message.mediaGroupId,
       });
 
-      // Фильтрация данных только с товарами в наличии
       if (message.isInStock) {
         postsDataFiltered.push({
           'media-group-id': message.mediaGroupId,
@@ -224,5 +202,10 @@ module.exports = { sleep };
     await saveCsvFileToDisk(PostsCsvConfig, 'export', postsDataFiltered);
   };
 
-  await scrapAllChannelPosts();
+  if (clientMan) {
+    await scrapAllChannelPosts();
+  } else {
+    console.log('please login');
+    return;
+  }
 })();

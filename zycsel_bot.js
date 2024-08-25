@@ -395,8 +395,6 @@ bot.on('edited_channel_post:media', async (ctx) => {
         })
         .join(',');
       sizes = channelPostSizes;
-
-      console.log(sizes);
     }
 
     if (editedChannelPostData.caption.match(BRAND_REGEXP)) {
