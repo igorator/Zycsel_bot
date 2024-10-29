@@ -24,4 +24,5 @@ To start using the Zycsel Store Bot, simply click the link above or search for *
 📂 **Development**  
 This bot is designed to be easily extendable, with a modular codebase leveraging the GrammY framework for handling Telegram Bot API interactions efficiently.
 
-![image](https://github.com/user-attachments/assets/e8dff298-cc3e-4352-a321-f15227824670)
+![image](https://github.com/user-attachments/assets/24de1c0e-c126-4cca-9913-2e735ba27f41)
+
