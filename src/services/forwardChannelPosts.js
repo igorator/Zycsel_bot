@@ -1,6 +1,6 @@
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const { SCREEN_FACTORY } = require('./renderControls');
-const { SCREENS } = require('../components/constants');
+const { SCREEN_FACTORY } = require('./render/renderCotrols');
+const { SCREENS } = require('../constants/screens');
 
 const forwardChannelPostsByIds = async (ctx, channelPosts, postOffset) => {
   let postCounter = 0;
@@ -11,16 +11,18 @@ const forwardChannelPostsByIds = async (ctx, channelPosts, postOffset) => {
     postCounter++;
 
     if (postCounter % 10 === 0) {
-      await ctx.reply(`Виведено ${i + 1} речей з ${channelPosts.length}`);
+      await ctx.reply(
+        `Виведено ${i + 1} речей з ${channelPosts.length}. Завантажити ще?`,
+      );
 
-      const renderControls = SCREEN_FACTORY[SCREENS.itemsSearchSelection];
+      const renderControls = SCREEN_FACTORY[SCREENS.itemsMoreSelection];
       await renderControls(ctx);
       break;
     }
   }
 
   if (postOffset + postCounter >= channelPosts.length) {
-    const renderControls = SCREEN_FACTORY[SCREENS.searchRefreshSelection];
+    const renderControls = SCREEN_FACTORY[SCREENS.itemsEndSelection];
     await renderControls(ctx);
   }
 };

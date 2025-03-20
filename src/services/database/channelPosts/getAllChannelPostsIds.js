@@ -1,9 +1,5 @@
-const { createClient } = require('@supabase/supabase-js');
-const { TABLES } = require('../components/constants');
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const { supabase } = require('../../../config/supabase.config');
+const { TABLES } = require('../../../constants');
 
 const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
   try {
@@ -27,7 +23,10 @@ const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
 
     const { data, error } = await query;
 
-    console.log(error);
+    if (error) {
+      console.error('Error fetching channel posts:', error);
+      return [];
+    }
 
     if (data) {
       for (const mediaGroupId of data) {
@@ -46,11 +45,9 @@ const getAllChannelPostsIds = async (itemType, isNew, size, brand) => {
 
     return filteredMessagesIds;
   } catch (error) {
-    console.error('Error reading file:', error);
+    console.error('Error in getAllChannelPostsIds:', error);
     return [];
   }
 };
 
-module.exports = {
-  getAllChannelPostsIds,
-};
+module.exports = { getAllChannelPostsIds };

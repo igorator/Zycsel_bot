@@ -12,7 +12,7 @@ const fs = require('fs');
 const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const moment = require('moment');
-const { SIZE_REGEXP, BRAND_REGEXP } = require('../components/constants');
+const { SIZE_REGEX, BRAND_REGEX } = require('../components/constants');
 
 const apiId = +process.env.TELEGRAM_APP_ID;
 const apiHash = process.env.TELEGRAM_API_HASH;
@@ -110,11 +110,13 @@ module.exports = { sleep };
             itemType = 'взуття';
           } else if (message.message.includes('#аксесуари')) {
             itemType = 'аксесуари';
+          } else if (message.message.includes('#парфуми')) {
+            itemType = 'парфуми';
           } else itemType = 'одяг';
 
-          if (message.message.match(SIZE_REGEXP)) {
+          if (message.message.match(SIZE_REGEX)) {
             const channelPostSizes = message.message
-              .match(SIZE_REGEXP)
+              .match(SIZE_REGEX)
               .map((size) => {
                 size = size.replace('#розмір_', '').replace('_', '.');
                 return ` ${size} `;
@@ -124,9 +126,9 @@ module.exports = { sleep };
             sizes = channelPostSizes;
           }
 
-          if (message.message.match(BRAND_REGEXP)) {
+          if (message.message.match(BRAND_REGEX)) {
             brand = message.message
-              .match(BRAND_REGEXP)[0]
+              .match(BRAND_REGEX)[0]
               .replace('#бренд_', '')
               .replace(/_/g, ' ')
               .split(' ')
@@ -136,9 +138,7 @@ module.exports = { sleep };
 
           isInStock = message.message.includes('#в_наявності');
 
-          isNew =
-            message.message.includes('#нове') ||
-            message.message.includes('Нова');
+          isNew = message.message.includes('#нове');
         }
 
         if (message.date) {
