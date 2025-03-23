@@ -27,7 +27,7 @@ const routes = {
     }
 
     if (session.type === ITEMS.parfumes.name) {
-      session.screen === SCREENS.sexSelection;
+      session.screen = SCREENS.sexSelection;
       return {
         screen: SCREENS.sexSelection,
         data: await getChannelPostsSex(session.type),

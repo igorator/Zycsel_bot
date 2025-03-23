@@ -22,7 +22,12 @@ const renderSizeSelection = async (ctx, sizes) => {
 
     const sizesKeyboard = formattedSizes.map((size) => [Keyboard.text(size)]);
 
-    await ctx.reply('Оберіть розмір:', {
+    const message =
+      ctx.session.type === ITEMS.parfumes.name
+        ? "Оберіть об'єм:"
+        : 'Оберіть розмір:';
+
+    await ctx.reply(message, {
       reply_markup: {
         keyboard: [NAV_BUTTONS.back, ...sizesKeyboard],
         resize_keyboard: true,
