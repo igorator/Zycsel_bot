@@ -1,8 +1,8 @@
 const KEYBOARDS = {
   typeSelection: [['Одяг'], ['Взуття'], ['Аксесуари'], ['Парфуми']],
-  qualitySelection: [['Нові'], ['Вживані'], ['Назад']],
+  qualitySelection: [['Нові'], ['Вживані']],
   allBrands: ['Всі бренди'],
-  itemsMoreSelection: [['Завантажити ще'], ['Знайти інші речі']],
+  itemsMoreSelection: [['Завантажити ще']],
   itemsEndSelection: [['Знайти інші речі']],
   itemsSexSelection: [['Чоловічі'], ['Жіночі'], ['Унісекс']],
 };

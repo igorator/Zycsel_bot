@@ -1,11 +1,11 @@
 const SCREENS = {
   typeSelection: 'typeSelection',
+  sexSelection: 'SexSelection',
   qualitySelection: 'qualitySelection',
   sizeSelection: 'sizeSelection',
   brandSelection: 'brandSelection',
   itemsMoreSelection: 'itemsMoreSelection',
   itemsEndSelection: 'itemsEndSelection',
-  itemsSexSelection: 'itemsSexSelection',
 };
 
 module.exports = { SCREENS };

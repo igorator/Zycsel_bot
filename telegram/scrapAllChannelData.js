@@ -12,7 +12,14 @@ const fs = require('fs');
 const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const moment = require('moment');
-const { SIZE_REGEX, BRAND_REGEX } = require('../components/constants');
+
+const {
+  SEX_REGEX,
+  BRAND_REGEX,
+  SIZE_REGEX,
+} = require('../src/constants/regex');
+
+const { sleep } = require('./helpers/sleep');
 
 const apiId = +process.env.TELEGRAM_APP_ID;
 const apiHash = process.env.TELEGRAM_API_HASH;
@@ -25,12 +32,6 @@ const stringSessionMan = new StringSession(
 const clientMan = new TelegramClient(stringSessionMan, apiId, apiHash, {
   connectionRetries: 5,
 });
-
-const sleep = (ms) => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
-module.exports = { sleep };
 
 (async () => {
   await clientMan.connect();
@@ -58,7 +59,7 @@ module.exports = { sleep };
   const scrapAllChannelPosts = async () => {
     const ALL_DATA = [];
 
-    for (i = 100; i > 0; i--) {
+    for (let i = 100; i > 0; i--) {
       let limit = 3000;
       let channelMessages;
       console.log('limit', limit);
@@ -96,6 +97,7 @@ module.exports = { sleep };
         let brand = null;
         let itemType = null;
         let sizes = null;
+        let sex = null;
 
         if (message.id) {
           messageId = message.id.toString();
@@ -113,6 +115,10 @@ module.exports = { sleep };
           } else if (message.message.includes('#парфуми')) {
             itemType = 'парфуми';
           } else itemType = 'одяг';
+
+          if (message.message.match(SEX_REGEX)) {
+            sex = message.message.match(SEX_REGEX)[0].replace('#стать_', '');
+          }
 
           if (message.message.match(SIZE_REGEX)) {
             const channelPostSizes = message.message
@@ -161,6 +167,7 @@ module.exports = { sleep };
           isInStock: isInStock,
           isNew: isNew,
           brand: brand,
+          sex: sex,
           size: sizes,
           itemType: itemType,
           createdAtDate: createdAtDate,
@@ -185,6 +192,7 @@ module.exports = { sleep };
           'media-group-id': message.mediaGroupId,
           'is-in-stock': message.isInStock,
           'is-new': message.isNew,
+          'sex': message.sex,
           'brand': message.brand,
           'sizes': message.size,
           'type': message.itemType,

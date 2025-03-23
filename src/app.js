@@ -1,25 +1,15 @@
 const express = require('express');
 const { run } = require('@grammyjs/runner');
 const bot = require('./config/bot.config');
-const { sessionMiddleware } = require('./middleware/session.middleware');
+const { sessionMiddleware } = require('./middleware/sessionMiddleware');
 const {
   throttler,
   rateLimiter,
   sequentialMiddleware,
   autoRetry,
-} = require('./middleware/throttler.middleware');
+} = require('./middleware/throttlerMiddleware');
 
-const { setupStartHandler } = require('./handlers/start.command');
-const {
-  setupTypeHandlers,
-  setupQualityHandlers,
-  setupSizeHandlers,
-  setupBrandHandlers,
-  setupAdditionalHandlers,
-  setupNavigationHandlers,
-} = require('./handlers/messages');
-const setupChannelPostHandler = require('./handlers/posts/channel.messages');
-const setupEditedPostHandler = require('./handlers/posts/edited.messages');
+const { setupControllers } = require('./controllers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,15 +24,7 @@ bot.use(rateLimiter);
 bot.api.config.use(autoRetry());
 bot.api.config.use(throttler);
 
-setupStartHandler(bot);
-setupTypeHandlers(bot);
-setupQualityHandlers(bot);
-setupSizeHandlers(bot);
-setupBrandHandlers(bot);
-setupAdditionalHandlers(bot);
-setupNavigationHandlers(bot);
-setupChannelPostHandler(bot);
-setupEditedPostHandler(bot);
+setupControllers(bot);
 
 const runner = run(bot);
 
