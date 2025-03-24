@@ -6,6 +6,7 @@ const { getChannelPostsQualities } = require('./getChannelPostsQualities');
 const { getChannelPostsSex } = require('./getChannelPostsSex');
 const { upsertPost } = require('./upsertPost');
 const { deletePost } = require('./deleteChannelPost');
+const { upsertMessage } = require('./upsertMessage');
 
 module.exports = {
   getChannelPostsTypes,
@@ -15,5 +16,6 @@ module.exports = {
   getChannelPostsQualities,
   getChannelPostsSex,
   upsertPost,
+  upsertMessage,
   deletePost,
 };
